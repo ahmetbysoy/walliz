@@ -51,6 +51,7 @@ flowchart LR
 ## Kritik Akışlar
 
 ### 1. Canlı veri döngüsü
+
 1. `app/useFeed` → `createMarketFeed({mode:'auto', symbol, timeframe})`.
 2. Live WS birleşik stream'den mesaj → zod doğrulama → `FeedEvent` → `marketStore.apply`.
 3. Store 100 ms throttle ile `wallEngine.push({book, candles, config})` çağrır →
@@ -59,6 +60,7 @@ flowchart LR
 4. Kline kapanış (`k.x === true`) → `predictionEngine.handleClosedCandle`.
 
 ### 2. Tahmin / öğrenme döngüsü
+
 1. Kapalı mum C geldi → önceki `pending` tahmin var mı?
    - `move = (C.close − basePrice) / basePrice`, `threshold = atrMoveFactor · ATR(14)`.
    - `|move| < 0.25·threshold` → neutral; değilse yön eşleşirse hit, yoksa miss.
@@ -70,6 +72,7 @@ flowchart LR
    (sayfa yenilense bile bir sonraki mumda çözülür).
 
 ### 3. Offline / hata senaryosu
+
 - `!navigator.onLine` veya `VITE_DEMO_MODE=1` → doğrudan demo feed.
 - WS 3 kez bağlanamaz / 30 sn mesaj yok → status `offline` → controller demo'ya düşer.
 - StatusPill `DEMO` gösterir; pill'e dokunmak `forceLive()` ile yeniden canlı dener.
@@ -92,9 +95,9 @@ flowchart LR
 
 ## Thread Modeli
 
-| Thread | İşler |
-|---|---|
-| Main | React render, feed event dağıtımı (100ms throttle), store güncelleme, PWA |
+| Thread | İşler                                                                                    |
+| ------ | ---------------------------------------------------------------------------------------- |
+| Main   | React render, feed event dağıtımı (100ms throttle), store güncelleme, PWA                |
 | Worker | `detectWalls` (20 satır), `WallTracker`, `computeFeatures` (≤500 mum), sonuç postMessage |
 
 Worker'ın üretilemediği ortamlarda (test, bazı webview'lar) `wallEngine` aynı

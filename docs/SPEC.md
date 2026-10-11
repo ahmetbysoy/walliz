@@ -15,26 +15,26 @@
 
 ## 1. Stack Kararları
 
-| Alan | Karar | Neden |
-|---|---|---|
-| Çekirdek | **Vite 5 + React 18 + TypeScript (strict)** | SSR gereksiz; PWA statik çalışır. Next ek ağırlık. |
-| State | **Zustand v5** | Hafif, selector'lı, test edilebilir. Redux Toolkit: KULLANILMIYOR. |
-| Server state | **TanStack Query v5** | Sadece REST kline geçmişinde; canlı veri ham WS üzerinden. |
-| Router | **Yok** (tek sayfa + tab) | Gereksiz bağımlılık. |
-| Stil | **Tailwind CSS v4** + tailwind-merge + clsx | CSS değişkenleri (`--mint`, `--coral`, `--violet`, `--bg`) `@theme inline` ile map edilir. |
-| UI kiti | **Radix** (Select, Dialog, Tabs, Collapsible) + **vaul** (bottom sheet) + **Sonner** (toast) | shadcn kalıbı, ama CLI yerine elle küçük sarmalayıcılar (registry erişimi yok). |
-| Animasyon | **Framer Motion** | Sheet/toast/sinyal animasyonları; `useReducedMotion` desteği. |
-| İkon | **lucide-react** | Emoji ikonlar kaldırıldı. |
-| Grafik | **lightweight-charts v4** | Mum grafiği + dokunmatik zoom/pan native. Recharts/Chart.js: KULLANILMIYOR. |
-| Validasyon | **zod v3** | WS mesaj şemaları; geçersiz mesaj → log, stream düşmez. |
-| Sayı | **decimal.js-light** | Orderbook satır parse/toplamlarında float hatası riski. |
-| Kalıcılık | **idb-keyval (IndexedDB)** | localStorage yerine; v1→v2 migrasyonu var. |
-| Gestür | **@use-gesture/react** | Swipe, pull-to-refresh, long-press (elde hook). |
-| PWA | **vite-plugin-pwa** (workbox) | Manifest + SW + offline fallback → demo mod. |
-| Test | **Vitest + Testing Library** (unit/integration), **Playwright** (E2E) | Coverage hedefi %70+. |
-| Lint | **ESLint 9 (flat) + Prettier + eslint-plugin-boundaries** | Feature sınırları zorlanıyor. |
-| Zaman | **Intl (cache'li)** | date-fns gerek kalmadı; `Intl.NumberFormat` modül seviyesinde cache. |
-| Worker | **Web Worker (Vite module worker)** | Duvar tespiti + feature hesabı; inline fallback (test/SSR). |
+| Alan         | Karar                                                                                        | Neden                                                                                      |
+| ------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Çekirdek     | **Vite 5 + React 18 + TypeScript (strict)**                                                  | SSR gereksiz; PWA statik çalışır. Next ek ağırlık.                                         |
+| State        | **Zustand v5**                                                                               | Hafif, selector'lı, test edilebilir. Redux Toolkit: KULLANILMIYOR.                         |
+| Server state | **TanStack Query v5**                                                                        | Sadece REST kline geçmişinde; canlı veri ham WS üzerinden.                                 |
+| Router       | **Yok** (tek sayfa + tab)                                                                    | Gereksiz bağımlılık.                                                                       |
+| Stil         | **Tailwind CSS v4** + tailwind-merge + clsx                                                  | CSS değişkenleri (`--mint`, `--coral`, `--violet`, `--bg`) `@theme inline` ile map edilir. |
+| UI kiti      | **Radix** (Select, Dialog, Tabs, Collapsible) + **vaul** (bottom sheet) + **Sonner** (toast) | shadcn kalıbı, ama CLI yerine elle küçük sarmalayıcılar (registry erişimi yok).            |
+| Animasyon    | **Framer Motion**                                                                            | Sheet/toast/sinyal animasyonları; `useReducedMotion` desteği.                              |
+| İkon         | **lucide-react**                                                                             | Emoji ikonlar kaldırıldı.                                                                  |
+| Grafik       | **lightweight-charts v4**                                                                    | Mum grafiği + dokunmatik zoom/pan native. Recharts/Chart.js: KULLANILMIYOR.                |
+| Validasyon   | **zod v3**                                                                                   | WS mesaj şemaları; geçersiz mesaj → log, stream düşmez.                                    |
+| Sayı         | **decimal.js-light**                                                                         | Orderbook satır parse/toplamlarında float hatası riski.                                    |
+| Kalıcılık    | **idb-keyval (IndexedDB)**                                                                   | localStorage yerine; v1→v2 migrasyonu var.                                                 |
+| Gestür       | **@use-gesture/react**                                                                       | Swipe, pull-to-refresh, long-press (elde hook).                                            |
+| PWA          | **vite-plugin-pwa** (workbox)                                                                | Manifest + SW + offline fallback → demo mod.                                               |
+| Test         | **Vitest + Testing Library** (unit/integration), **Playwright** (E2E)                        | Coverage hedefi %70+.                                                                      |
+| Lint         | **ESLint 9 (flat) + Prettier + eslint-plugin-boundaries**                                    | Feature sınırları zorlanıyor.                                                              |
+| Zaman        | **Intl (cache'li)**                                                                          | date-fns gerek kalmadı; `Intl.NumberFormat` modül seviyesinde cache.                       |
+| Worker       | **Web Worker (Vite module worker)**                                                          | Duvar tespiti + feature hesabı; inline fallback (test/SSR).                                |
 
 **Kaçınılanlar:** Redux Toolkit, Recharts/Chart.js, MUI/AntD, Socket.io, Moment.js,
 ham localStorage, render başına Intl.NumberFormat, main thread'de ağır hesap, sabit reconnect.
@@ -64,6 +64,7 @@ src/
 ```
 
 **Kurallar (eslint-plugin-boundaries ile zorlu):**
+
 - `features/*` → yalnızca `entities/*` ve `shared/*` import edebilir. Feature ↔ feature import YASAK.
 - `entities/*` → yalnızca tipler; `shared/*`'a import edebilir, feature'a edemez.
 - `shared/*` → hiçbir feature/app modülüne import edemez (en alt katman).
@@ -75,19 +76,25 @@ src/
 
 ```ts
 interface MarketFeed {
-  readonly symbol: string; readonly timeframe: string; readonly mode: 'live' | 'demo';
-  start(): void; stop(): void; setPaused(p: boolean): void; forceLive(): void;
-  on(handler: (e: FeedEvent) => void): () => void;
+  readonly symbol: string
+  readonly timeframe: string
+  readonly mode: 'live' | 'demo'
+  start(): void
+  stop(): void
+  setPaused(p: boolean): void
+  forceLive(): void
+  on(handler: (e: FeedEvent) => void): () => void
 }
 type FeedEvent =
   | { type: 'status'; status: FeedStatus; error?: string }
   | { type: 'book'; book: BookSnapshot }
-  | { type: 'candle'; candle: Candle }        // açık mum canlı güncelleme veya kapanış
+  | { type: 'candle'; candle: Candle } // açık mum canlı güncelleme veya kapanış
   | { type: 'ticker'; ticker: Ticker }
-  | { type: 'history'; candles: Candle[] };   // başlangıç seed'i
+  | { type: 'history'; candles: Candle[] } // başlangıç seed'i
 ```
 
 `createMarketFeed(opts)` fabrikası:
+
 - `mode: 'demo'` veya `VITE_DEMO_MODE=1` veya `!navigator.onLine` → **demo feed**.
 - `mode: 'auto'` → live dene; **3 deneme / 30 sn** içinde kurulamazsa demo'ya düş (status pill DEMO).
 - Pill'e dokununca `forceLive()` ile tekrar canlı denemesi.
@@ -113,12 +120,14 @@ type FeedEvent =
 ### 3.4 Orderbook normalizasyonu
 
 `shared/lib/book.ts` — `normalizeBookRows(rows, side)`:
+
 - string→number (decimal.js-light), NaN/≤0 satırlar atılır; sıralama (bids ↓, asks ↑);
 - aynı fiyat birleştirilir (qty toplam); **kümülatif derinlik** (`total`) eklenir.
 
 ## 4. Duvar Tespiti
 
 `shared/lib/walls.ts` — `detectWalls(book, { multiplier, window, maxWalls }): Wall[]`
+
 - **Adaptif eşik:** coin bazlı `wallMultiplier` (BTC 2.2 … DOGE 1.4) `shared/config`'te.
 - **Kümülatif pencere:** i..i+2 toplamı ≥ `median(levelQty) * window * multiplier` → duvar (komşular birleşir).
 - `strength = windowQty / (median * window)` → renk/opasite + model feature'ı.
@@ -138,8 +147,8 @@ Matematik detayı: `docs/MODEL.md`. Özet:
   ağırlıklar [-2,2] clamp.
 - **Versiyonlama:** `weights.version`; sürüm uyuşmazlığında ağırlıklar sıfırlanır, istatistikler korunur.
 - **Koşu zamanı:** `features/prediction/lib/predictionEngine.ts` — kapalı mumda:
-  1) bekleyen tahmin çözümlenir (hit/miss/neutral) → ağırlık güncelleme + istatistik + kova + haptic + toast;
-  2) yeni tahmin üretilir. Tüm state IndexedDB'ye persist (sayfa yenilense de bekleyen tahmin korunur).
+  1. bekleyen tahmin çözümlenir (hit/miss/neutral) → ağırlık güncelleme + istatistik + kova + haptic + toast;
+  2. yeni tahmin üretilir. Tüm state IndexedDB'ye persist (sayfa yenilense de bekleyen tahmin korunur).
 
 ## 6. Kalıcılık (IndexedDB)
 
@@ -178,12 +187,12 @@ Matematik detayı: `docs/MODEL.md`. Özet:
 
 ## 9. Test
 
-| Katman | Araç | Kapsam |
-|---|---|---|
-| Unit | Vitest | `detectWalls`, `normalizeBookRows`, `PredictionModel`, `format*`, demo RNG determinizmi, buckets, migrasyon, marketStore |
-| Integration | Vitest + jsdom | demo feed → store → panel render; mock WebSocket → mesaj → state; backoff → demo fallback |
-| E2E | Playwright (iPhone 13 / Pixel 5 / Desktop) | açılış, coin değişimi, tab navigasyonu, offline → demo |
-| Coverage | v8 | hedef %70+ (`npm run test:coverage`) |
+| Katman      | Araç                                       | Kapsam                                                                                                                   |
+| ----------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| Unit        | Vitest                                     | `detectWalls`, `normalizeBookRows`, `PredictionModel`, `format*`, demo RNG determinizmi, buckets, migrasyon, marketStore |
+| Integration | Vitest + jsdom                             | demo feed → store → panel render; mock WebSocket → mesaj → state; backoff → demo fallback                                |
+| E2E         | Playwright (iPhone 13 / Pixel 5 / Desktop) | açılış, coin değişimi, tab navigasyonu, offline → demo                                                                   |
+| Coverage    | v8                                         | hedef %70+ (`npm run test:coverage`)                                                                                     |
 
 ## 10. DevOps & Yayın
 
