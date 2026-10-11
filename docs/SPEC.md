@@ -9,32 +9,33 @@
 - Duvar (wall) tespiti: orderbook'te olağandışı hacim kümelenmelerini gerçek zamanlı bulur.
 - Öğrenme: her mum kapanışında yön tahmini yapar, sonuçla karşılaştırır, ağırlıklarını günceller (coin başına).
 - Kovalar (pyramid): tahmin doğruluğunu güven aralığına göre bucket'lar; "modelin kendine güveni ne kadar güvenilir?" sorusuna cevap verir.
-- Demo modu: canlı veri yoksa (offline, hata, sandbox) deterministik seed'li feed'e düşer; UI'da açıkça gösterilir.
+- Gerçek veri: uygulama yalnızca gerçek borsa akışıyla (Binance WS + REST) çalışır.
+  Simülasyon/mock/yer tutucu veri YOKTUR; bağlantı yoksa arayüz bunu açıkça bildirir.
 
 **Hedef kitle:** mobilde hızlı bakan trader'lar. Masaüstü ikincil.
 
 ## 1. Stack Kararları
 
-| Alan         | Karar                                                                                        | Neden                                                                                      |
-| ------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Çekirdek     | **Vite 5 + React 18 + TypeScript (strict)**                                                  | SSR gereksiz; PWA statik çalışır. Next ek ağırlık.                                         |
-| State        | **Zustand v5**                                                                               | Hafif, selector'lı, test edilebilir. Redux Toolkit: KULLANILMIYOR.                         |
-| Server state | **TanStack Query v5**                                                                        | Sadece REST kline geçmişinde; canlı veri ham WS üzerinden.                                 |
-| Router       | **Yok** (tek sayfa + tab)                                                                    | Gereksiz bağımlılık.                                                                       |
-| Stil         | **Tailwind CSS v4** + tailwind-merge + clsx                                                  | CSS değişkenleri (`--mint`, `--coral`, `--violet`, `--bg`) `@theme inline` ile map edilir. |
-| UI kiti      | **Radix** (Select, Dialog, Tabs, Collapsible) + **vaul** (bottom sheet) + **Sonner** (toast) | shadcn kalıbı, ama CLI yerine elle küçük sarmalayıcılar (registry erişimi yok).            |
-| Animasyon    | **Framer Motion**                                                                            | Sheet/toast/sinyal animasyonları; `useReducedMotion` desteği.                              |
-| İkon         | **lucide-react**                                                                             | Emoji ikonlar kaldırıldı.                                                                  |
-| Grafik       | **lightweight-charts v4**                                                                    | Mum grafiği + dokunmatik zoom/pan native. Recharts/Chart.js: KULLANILMIYOR.                |
-| Validasyon   | **zod v3**                                                                                   | WS mesaj şemaları; geçersiz mesaj → log, stream düşmez.                                    |
-| Sayı         | **decimal.js-light**                                                                         | Orderbook satır parse/toplamlarında float hatası riski.                                    |
-| Kalıcılık    | **idb-keyval (IndexedDB)**                                                                   | localStorage yerine; v1→v2 migrasyonu var.                                                 |
-| Gestür       | **@use-gesture/react**                                                                       | Swipe, pull-to-refresh, long-press (elde hook).                                            |
-| PWA          | **vite-plugin-pwa** (workbox)                                                                | Manifest + SW + offline fallback → demo mod.                                               |
-| Test         | **Vitest + Testing Library** (unit/integration), **Playwright** (E2E)                        | Coverage hedefi %70+.                                                                      |
-| Lint         | **ESLint 9 (flat) + Prettier + eslint-plugin-boundaries**                                    | Feature sınırları zorlanıyor.                                                              |
-| Zaman        | **Intl (cache'li)**                                                                          | date-fns gerek kalmadı; `Intl.NumberFormat` modül seviyesinde cache.                       |
-| Worker       | **Web Worker (Vite module worker)**                                                          | Duvar tespiti + feature hesabı; inline fallback (test/SSR).                                |
+| Alan         | Karar                                                                                        | Neden                                                                                                          |
+| ------------ | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Çekirdek     | **Vite 5 + React 18 + TypeScript (strict)**                                                  | SSR gereksiz; PWA statik çalışır. Next ek ağırlık.                                                             |
+| State        | **Zustand v5**                                                                               | Hafif, selector'lı, test edilebilir. Redux Toolkit: KULLANILMIYOR.                                             |
+| Server state | **TanStack Query v5**                                                                        | Sadece REST kline geçmişinde; canlı veri ham WS üzerinden.                                                     |
+| Router       | **Yok** (tek sayfa + tab)                                                                    | Gereksiz bağımlılık.                                                                                           |
+| Stil         | **Tailwind CSS v4** + tailwind-merge + clsx                                                  | CSS değişkenleri (`--mint`, `--coral`, `--violet`, `--bg`) `@theme inline` ile map edilir.                     |
+| UI kiti      | **Radix** (Select, Dialog, Tabs, Collapsible) + **vaul** (bottom sheet) + **Sonner** (toast) | shadcn kalıbı, ama CLI yerine elle küçük sarmalayıcılar (registry erişimi yok).                                |
+| Animasyon    | **Framer Motion**                                                                            | Sheet/toast/sinyal animasyonları; `useReducedMotion` desteği.                                                  |
+| İkon         | **lucide-react**                                                                             | Emoji ikonlar kaldırıldı.                                                                                      |
+| Grafik       | **lightweight-charts v4**                                                                    | Mum grafiği + dokunmatik zoom/pan native. Recharts/Chart.js: KULLANILMIYOR.                                    |
+| Validasyon   | **zod v3**                                                                                   | WS mesaj şemaları; geçersiz mesaj → log, stream düşmez.                                                        |
+| Sayı         | **decimal.js-light**                                                                         | Orderbook satır parse/toplamlarında float hatası riski.                                                        |
+| Kalıcılık    | **idb-keyval (IndexedDB)**                                                                   | localStorage yerine; v1→v2 migrasyonu var.                                                                     |
+| Gestür       | **@use-gesture/react**                                                                       | Swipe, pull-to-refresh, long-press (elde hook).                                                                |
+| PWA          | **vite-plugin-pwa** (workbox)                                                                | Manifest + SW; uygulama kabuğu önbellekte, borsa yanıtları **NetworkOnly** (eski veri canlı gibi gösterilmez). |
+| Test         | **Vitest + Testing Library** (unit/integration), **Playwright** (E2E)                        | Coverage hedefi %70+.                                                                                          |
+| Lint         | **ESLint 9 (flat) + Prettier + eslint-plugin-boundaries**                                    | Feature sınırları zorlanıyor.                                                                                  |
+| Zaman        | **Intl (cache'li)**                                                                          | date-fns gerek kalmadı; `Intl.NumberFormat` modül seviyesinde cache.                                           |
+| Worker       | **Web Worker (Vite module worker)**                                                          | Duvar tespiti + feature hesabı; inline fallback (test/SSR).                                                    |
 
 **Kaçınılanlar:** Redux Toolkit, Recharts/Chart.js, MUI/AntD, Socket.io, Moment.js,
 ham localStorage, render başına Intl.NumberFormat, main thread'de ağır hesap, sabit reconnect.
@@ -46,16 +47,16 @@ src/
 ├── app/                 # entry, providers, shell, feed/engine orkestrasyon hook'ları
 ├── entities/            # paylaşılan tipler (market, orderbook, prediction) — fonksiyon YOK
 ├── features/
-│   ├── market-feed/     # live WS feed + demo feed + StatusPill
+│   ├── market-feed/     # canlı WS+REST feed (gerçek veri) + StatusPill
 │   ├── orderbook/       # kitap + duvar UI (saf algoritmalar shared/lib'de)
-│   ├── chart/           # lightweight-charts sarmalayıcı
+│   ├── chart/           # lightweight-charts sarmalayıcı + senkron planı (lib/chartSync)
 │   ├── pyramid/         # kovalar (bucket) UI
 │   ├── prediction/      # tahmin motoru orkestrasyonu + sinyal UI
 │   ├── learning-memory/ # kalıcılık UI + export/import
 │   └── preferences/     # coin / timeframe seçicileri
 ├── shared/
 │   ├── config/          # COINS, TIMEFRAMES, env (ws/rest base), duvar sabitleri
-│   ├── lib/             # format, math, book, walls, features, model, buckets, repo, wallEngine
+│   ├── lib/             # format, math, book, klines, candles, walls, features, model, buckets, repo, wallEngine
 │   ├── model/           # marketStore + learningStore (zustand) — cross-feature state
 │   ├── ui/              # Button, Card, MetricCard, Sheet, Select, Tabs, Skeleton, EmptyState, ConfidenceBar
 │   ├── workers/         # wallWorker.ts (duvar + feature)
@@ -78,11 +79,12 @@ src/
 interface MarketFeed {
   readonly symbol: string
   readonly timeframe: string
-  readonly mode: 'live' | 'demo'
+  readonly mode: 'live'
   start(): void
   stop(): void
   setPaused(p: boolean): void
-  forceLive(): void
+  /** Kullanıcı aksiyonu: backoff sıfırlanır, host rotasyonu yapılır, hemen bağlanılır */
+  retryNow(): void
   on(handler: (e: FeedEvent) => void): () => void
 }
 type FeedEvent =
@@ -90,34 +92,51 @@ type FeedEvent =
   | { type: 'book'; book: BookSnapshot }
   | { type: 'candle'; candle: Candle } // açık mum canlı güncelleme veya kapanış
   | { type: 'ticker'; ticker: Ticker }
-  | { type: 'history'; candles: Candle[] } // başlangıç seed'i
+  | { type: 'history'; candles: Candle[] } // REST geçmişi (canlı mumlarla birleştirilir)
 ```
 
 `createMarketFeed(opts)` fabrikası:
 
-- `mode: 'demo'` veya `VITE_DEMO_MODE=1` veya `!navigator.onLine` → **demo feed**.
-- `mode: 'auto'` → live dene; **3 deneme / 30 sn** içinde kurulamazsa demo'ya düş (status pill DEMO).
-- Pill'e dokununca `forceLive()` ile tekrar canlı denemesi.
+- Tek veri kaynağı **gerçek borsa**: WS birleşik stream + REST kline geçmişi.
+- Tarayıcı ağı koptuğunda status `offline` olur; `online` olayında `retryNow()` ile anında deneme.
+- Pill'e dokunmak (`retryNow`) backoff'u sıfırlar ve hemen yeniden bağlanır.
+- Veri gelmediğinde hiçbir yedek/simüle kaynak devreye girmez: arayüz boş kalır ve durumu söyler.
 
 ### 3.2 Live feed
 
 - Tek bağlantı: `depth20@100ms + kline_<tf> + ticker` (combined stream URL).
-- Mesajlar zod ile doğrulanır (`zDepth20`, `zKline`, `zTicker`); geçersiz → `console.debug` + atla.
-- **Exponential backoff:** 1s → 2s → 4s → 8s → … max 30s.
-- **Heartbeat:** 30 sn mesaj gelmezse `ws.close()` → yeniden bağlan.
-- **Visibility API:** sekme hidden → WS kapat (pil); visible → hızlı reconnect.
-- **Network API:** `offline` → anında demo; `online` → canlı denemesi.
-- Geçmiş mumlar REST `GET /api/v3/klines?limit=300` ile seed edilir (başarısızsa sessizce).
+- Mesajlar zod ile doğrulanır (`depth20Schema`, `klineSchema`, `tickerSchema`);
+  geçersiz → `console.warn` + atla (akış düşmez). Eski `depth20` snapshot'ı (geriye düşen `u`) atılır.
+- **Exponential backoff:** 1s → 2s → 4s → 8s → … max 30s, ±%20 jitter ile.
+- **Host rotasyonu:** birincil WS/REST host'a erişilemezse gerçek yedek host'lar denenir.
+- **Heartbeat:** 30 sn mesaj gelmezse soket ölü kabul edilir → yeniden bağlan.
+- **Visibility API:** sekme hidden → WS kapat (pil); visible → yeniden bağlan.
+- **Network API:** `offline` → status `offline`; `online` → `retryNow()`.
+- Geçmiş mumlar REST `GET /api/v3/klines?limit=500` ile alınır; kapanmışlık gerçek `closeTime`
+  alanından türetilir. Alınamazsa `HISTORY_RETRY_MS` aralığıyla yeniden denenir.
+- **Hiçbir koşulda üretilmiş veri yayınlanmaz** (bkz. 3.3).
 
-### 3.3 Demo feed
+### 3.3 Veri dürüstlüğü (simülasyon yasağı)
 
-- Ayrı modül, aynı `MarketFeed` arayüzü. **Seed'li RNG (mulberry32)** → deterministik.
-- Seed = `hash(symbol + timeframe + VITE_DEMO_SEED?)`.
-- 180 geçmiş mum + canlı random-walk; kitaba periyodik duvar yerleştirir (20–60 tick ömür).
-- Demo mumlar hızlandırılmış (8 sn/kapanış) — E2E'de tahmin döngüsü gözlemlenebilir.
-- Testlerde `timed: false` + manuel `tick()` ile tamamen deterministik akış.
+- Kod tabanında simülasyon/mock feed, seed'li RNG, sentetik fiyat serisi **bulunmaz**.
+- Veri gelmediğinde: mum yok, kitap yok, fiyat yok → arayüz boş durum + durum bildirimi gösterir.
+- Servis çalışanı borsa yanıtlarını önbelleğe almaz (NetworkOnly), böylece eski veri
+  "canlı" gibi sunulmaz.
+- Ölçüm/araştırma araçları da gerçek veriyle çalışır: `npm run backtest` gerçek Binance
+  kline verisi çeker (ağ yoksa `KLINES_FILE` ile gerçek veri dosyası verilir).
 
-### 3.4 Orderbook normalizasyonu
+### 3.4 Mum penceresi ve sıralama garantisi
+
+`shared/lib/candles.ts`:
+
+- `upsertCandle`: aynı zaman → güncelle (kapanmış mum açılmaz), eski zaman → doğru konuma ekle,
+  üst sınır (`MAX_CANDLES = 500`) aşılırsa en eskiler düşer.
+- `mergeHistory`: REST geçmişi canlı mumlarla birleştirilir (geçmiş kapalı mumda kesin kaynak,
+  açık mumda canlı veri taze kabul edilir).
+- Store `candlesRewriteSeq` ile pencere yapısının değiştiğini bildirir; grafik tam `setData()`
+  yapar. Böylece `series.update()` daima ileri giden zamanla çağrılır (bkz. ARCHITECTURE §3).
+
+### 3.5 Orderbook normalizasyonu
 
 `shared/lib/book.ts` — `normalizeBookRows(rows, side)`:
 
@@ -182,37 +201,43 @@ Matematik detayı: `docs/MODEL.md`. Özet:
 - `Intl.NumberFormat` **modül seviyesinde cache**.
 - `React.memo` (orderbook satırı), `useMemo`/`useCallback` kritik yollarda.
 - Grafik `React.lazy` ile yavaş yüklenir (ilk açılışta panel skeleton ile).
-- PWA: statikler cache-first (precache), REST NetworkFirst (1 sn), WS network-only.
+- PWA: statikler cache-first (precache), borsa REST yanıtları **NetworkOnly** (eski veri gösterilmez), WS network-only.
 - Bundle analizi: `npm run bundle:analyze` (rollup-plugin-visualizer).
 
 ## 9. Test
 
-| Katman      | Araç                                       | Kapsam                                                                                                                   |
-| ----------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| Unit        | Vitest                                     | `detectWalls`, `normalizeBookRows`, `PredictionModel`, `format*`, demo RNG determinizmi, buckets, migrasyon, marketStore |
-| Integration | Vitest + jsdom                             | demo feed → store → panel render; mock WebSocket → mesaj → state; backoff → demo fallback                                |
-| E2E         | Playwright (iPhone 13 / Pixel 5 / Desktop) | açılış, coin değişimi, tab navigasyonu, offline → demo                                                                   |
-| Coverage    | v8                                         | hedef %70+ (`npm run test:coverage`)                                                                                     |
+| Katman      | Araç                                       | Kapsam                                                                                                                                            |
+| ----------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit        | Vitest                                     | `detectWalls`, `normalizeBookRows`, `upsertCandle`/`mergeHistory`, `planChartSync`, `PredictionModel`, `format*`, buckets, migrasyon, marketStore |
+| Integration | Vitest + jsdom                             | canlı feed (Binance tel formatı) → store → panel render; backoff/host rotasyonu; veri yokken hiçbir veri üretilmediğinin doğrulanması             |
+| Gerçek ağ   | Vitest (opt-in)                            | `LANKA_LIVE_NETWORK=1` → canlı Binance REST'ten gerçek mumlar                                                                                     |
+| E2E         | Playwright (iPhone 13 / Pixel 5 / Desktop) | açılış, gerçek fiyat/grafik, çevrimdışı dürüst durum, coin değişimi, tab navigasyonu, pull-to-refresh                                             |
+| Coverage    | v8                                         | hedef %70+ (`npm run test:coverage`)                                                                                                              |
 
 ## 10. DevOps & Yayın
 
 - **CI (GitHub Actions):** lint → test(coverage) → format check → build; ayrı job'da Playwright (chromium).
 - **Deploy:** statik build → Vercel/Netlify (server gerekmez; WS tarayıcıdan bağlanır).
-- **Env:** `VITE_DEMO_MODE`, `VITE_BINANCE_WS`, `VITE_BINANCE_REST`, `VITE_DEMO_SEED` (örnek: `.env.example`).
-- **PWA:** manifest (192/512 + maskable), `display: standalone`, tema rengi; offline → demo mod.
+- **Env:** `VITE_BINANCE_WS`, `VITE_BINANCE_WS_FALLBACKS`, `VITE_BINANCE_REST`,
+  `VITE_BINANCE_REST_FALLBACKS` (örnek: `.env.example`).
+- **PWA:** manifest (192/512 + maskable), `display: standalone`, tema rengi; çevrimdışıyken
+  uygulama kabuğu açılır, bağlantı durumu açıkça bildirilir.
 - **Opsiyonel (bu kapsamda değil):** Sentry, analytics, Storybook, Capacitor paketleme.
 
 ## 11. Kabul Kriterleri (Definition of Done)
 
 - [x] Mobil viewport'ta akıcı render (worker + throttle + memo).
 - [x] İlk yükleme < 2 s (statik + precache); 3G senaryosu CI'da ölçülür (Lighthouse — izleme).
-- [x] WS kopunca < 30 sn içinde reconnect veya demo'ya düş (backoff + fallback testi var).
+- [x] WS kopunca < 30 sn içinde reconnect (backoff + host rotasyonu + watchdog testleri var).
 - [x] Öğrenme verisi IndexedDB'de kalıcı; sayfa yenilenince korunur (test).
 - [x] Tüm unit testler geçiyor, coverage > %70.
 - [x] E2E 3 viewport'ta (CI'da).
 - [x] Coin değişiminde yeni veri anında (store reset + yeni feed; test).
 - [x] Duvar tespiti worker'da (inline fallback test edilebilir).
-- [x] PWA yüklenebilir; offline'da demo modda çalışır (E2E + SW).
+- [x] PWA yüklenebilir; çevrimdışıyken dürüst bağlantı durumu gösterir (E2E + SW).
+- [x] Grafik motoru hatası imkânsız: `planChartSync` geriye giden zamanı asla `update()` ile
+      göndermez (bkz. ARCHITECTURE §3) — regresyon testleri var.
+- [x] Kod tabanında simülasyon/mock/yer tutucu veri yok; bağlantı yoksa veri uydurulmaz.
 
 ## 12. Kapsam Notu (Bu Çalışma Oturumu)
 

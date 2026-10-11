@@ -6,7 +6,8 @@ import { useMarketStore } from '@/shared/model/marketStore'
 /**
  * Feed yaşam döngüsü: sembol/timeframe/epoch değişince feed yeniden kurulur.
  * - Visibility API: sekme hidden → WS kapat (pil)
- * - forceLive: status pill'den canlı veri denemesi
+ * - retry(): kullanıcı aksiyonu → backoff sıfırlanır, hemen yeniden bağlanılır
+ * - restart(): pull-to-refresh → feed tamamen yeniden kurulur (geçmiş mum yeniden çekilir)
  */
 export function useFeed(ready: boolean) {
   const symbol = useMarketStore((s) => s.symbol)
@@ -15,14 +16,14 @@ export function useFeed(ready: boolean) {
   const feedRef = useRef<MarketFeed | null>(null)
 
   const restart = useCallback(() => setEpoch((e) => e + 1), [])
-  const forceLive = useCallback(() => {
-    feedRef.current?.forceLive()
+  const retry = useCallback(() => {
+    feedRef.current?.retryNow()
   }, [])
 
   useEffect(() => {
     if (!ready) return
     useMarketStore.getState().reset(symbol, timeframe)
-    const feed = createMarketFeed({ symbol, timeframe, mode: 'auto' })
+    const feed = createMarketFeed({ symbol, timeframe })
     feedRef.current = feed
     const off = feed.on((e) => useMarketStore.getState().apply(e))
     feed.start()
@@ -37,5 +38,5 @@ export function useFeed(ready: boolean) {
     }
   }, [ready, symbol, timeframe, epoch])
 
-  return { restart, forceLive }
+  return { restart, retry }
 }

@@ -72,3 +72,15 @@ model aşırı özgüvenli demektir).
 - Pending tahmin persist edilir → sayfa yenilense bile bir sonraki mumda çözülür.
 - 90 günden eski `recent` kayıtları otomatik elenir.
 - Export/Import: JSON (zod doğrulamalı).
+
+## Uygulama Notları (gerçek veri)
+
+- Tahmin için alt sınır: `MIN_CANDLES_FOR_PREDICTION = 25` mum **ve** canlı orderbook.
+  REST geçmişi ile WS derinliği farklı anlarda hazır olabileceği için kapalı mum,
+  ön koşullar sağlanana kadar bekletilir; `handleClosedCandle` bu durumda `false` döner
+  (çağıran taraf `app/shell/usePrediction` mumu bekleyen mum olarak tutar, en fazla 3 deneme).
+- Öğrenme verisi yüklenirken oluşan yarışlar `learningStore.revision` ile korunur: taze
+  doğrulama diskteki eski kayıt tarafından ezilmez.
+- Backtest (`npm run backtest`) gerçek Binance kline verisiyle çalışır; geçmiş orderbook
+  derinliği public API'de bulunmadığı için `imbalance` ve `wallPressure` ablasyonla
+  (ağırlık 0) devre dışı bırakılır — ölçüm yalnızca fiyat türevi feature'larla yapılır.

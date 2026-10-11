@@ -1,13 +1,18 @@
 import type { FeedEvent, MarketFeed, MarketFeedOptions } from '@/entities'
-import { DEMO_MODE_FORCED, REST_BASE, WS_BASE } from '@/shared/config/coins'
-import { createDemoFeed } from '../lib/demoFeed'
+import { REST_BASE, REST_FALLBACKS, WS_BASE, WS_FALLBACKS } from '@/shared/config/coins'
 import { createLiveFeed, type LiveFeed } from '../lib/liveFeed'
 
 /**
- * Feed fabrikası:
- * - mode 'demo' veya VITE_DEMO_MODE=1 veya !navigator.onLine → doğrudan demo
- * - mode 'auto' → live dene; 3 deneme / 30 sn içinde kurulamazsa demo'ya düş
- * - pill'e dokunma → forceLive()
+ * Feed giriş noktası — yalnızca gerçek borsa verisi.
+ *
+ * Simülasyon/mock katmanı yoktur: bağlantı kurulamazsa status `offline` olur ve
+ * uygulama veri göstermez (uydurma mum/fiyat/kitap üretilmez). Bağlantı geri
+ * geldiğinde aynı feed kaldığı yerden devam eder.
+ *
+ * Sorumluluklar:
+ * - WS + REST istemcisini (liveFeed) kurmak ve yaşam döngüsünü yönetmek
+ * - Tarayıcı ağ durumu (online/offline) ile feed'i senkronlamak
+ * - `retryNow()` ile kullanıcı aksiyonunu feed'e iletmek
  */
 export function createMarketFeed(opts: MarketFeedOptions): MarketFeed {
   const handlers = new Set<(e: FeedEvent) => void>()
@@ -15,79 +20,65 @@ export function createMarketFeed(opts: MarketFeedOptions): MarketFeed {
     for (const h of handlers) h(e)
   }
 
-  const demo = createDemoFeed(opts)
-  let live: LiveFeed | null = null
-  let mode: 'live' | 'demo' = shouldStartLive(opts) ? 'live' : 'demo'
   let stopped = false
 
-  if (mode === 'live') live = attachLive()
-  demo.on(emit)
+  const live: LiveFeed = createLiveFeed({
+    symbol: opts.symbol,
+    timeframe: opts.timeframe,
+    wsBase: opts.wsBase ?? WS_BASE,
+    wsFallbacks: opts.wsFallbacks ?? WS_FALLBACKS,
+    restBase: opts.restBase ?? REST_BASE,
+    restFallbacks: opts.restFallbacks ?? REST_FALLBACKS,
+    now: opts.now,
+    historyLimit: opts.historyLimit,
+    offlineAfterAttempts: opts.offlineAfterAttempts,
+    isOffline: () => typeof navigator !== 'undefined' && navigator.onLine === false,
+  })
+  const offLive = live.on(emit)
 
-  function attachLive(): LiveFeed {
-    const lf = createLiveFeed({
-      symbol: opts.symbol,
-      timeframe: opts.timeframe,
-      wsBase: opts.wsBase ?? WS_BASE,
-      restBase: opts.restBase ?? REST_BASE,
-      now: opts.now,
-      maxAttempts: opts.maxLiveAttempts ?? 3,
-      fallbackAfterMs: opts.fallbackAfterMs ?? 30_000,
-    })
-    lf.on((e) => {
-      if (e.type === 'status' && e.status === 'offline' && mode === 'live' && !stopped) {
-        switchToDemo(e.error)
-      } else {
-        emit(e)
-      }
-    })
-    return lf
+  const hasWindow = typeof window !== 'undefined'
+  const onOnline = () => {
+    if (stopped) return
+    emit({ type: 'status', status: 'reconnecting', error: 'ag-geri-geldi' })
+    live.retryNow()
+  }
+  const onOffline = () => {
+    if (stopped) return
+    emit({ type: 'status', status: 'offline', error: 'tarayici-cevrimdisi' })
+  }
+  if (hasWindow) {
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
   }
 
-  function switchToDemo(error?: string) {
-    if (mode === 'demo') return
-    mode = 'demo'
-    live?.stop()
-    live = null
-    emit({ type: 'status', status: 'demo', error })
-    demo.start()
-  }
+  const offlineNow = typeof navigator !== 'undefined' && navigator.onLine === false
 
   return {
     symbol: opts.symbol,
     timeframe: opts.timeframe,
-    mode,
+    mode: 'live',
     start: () => {
       if (stopped) return
-      if (mode === 'live') live?.start()
-      else demo.start()
+      if (offlineNow) emit({ type: 'status', status: 'offline', error: 'tarayici-cevrimdisi' })
+      live.start()
     },
     stop: () => {
       stopped = true
-      live?.stop()
-      demo.stop()
+      offLive()
+      if (hasWindow) {
+        window.removeEventListener('online', onOnline)
+        window.removeEventListener('offline', onOffline)
+      }
+      live.stop()
     },
-    setPaused: (p) => {
-      live?.setPaused(p)
-      demo.setPaused(p)
-    },
-    forceLive: () => {
-      if (stopped || mode === 'live') return
-      live = attachLive()
-      mode = 'live'
-      demo.stop()
-      live.start()
+    setPaused: (p) => live.setPaused(p),
+    retryNow: () => {
+      if (stopped) return
+      live.retryNow()
     },
     on: (h) => {
       handlers.add(h)
       return () => handlers.delete(h)
     },
   }
-}
-
-function shouldStartLive(opts: MarketFeedOptions): boolean {
-  if (opts.mode === 'demo') return false
-  if (opts.mode === 'live') return true
-  if (DEMO_MODE_FORCED) return false
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false
-  return true
 }

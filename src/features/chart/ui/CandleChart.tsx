@@ -8,14 +8,26 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts'
-import type { Candle, Wall } from '@/entities'
+import { WifiOff } from 'lucide-react'
+import type { Candle, FeedStatus, Wall } from '@/entities'
 import { getCoin } from '@/shared/config/coins'
 import { clamp01 } from '@/shared/lib/math'
 import { formatPrice } from '@/shared/lib/format'
 import { useMarketStore } from '@/shared/model/marketStore'
 import { Skeleton } from '@/shared/ui/Skeleton'
+import { INITIAL_SYNC_STATE, commitChartSync, planChartSync } from '../lib/chartSync'
 
-/** lightweight-charts v4 sarmalayıcı: mum + volume + duvar fiyat çizgileri. */
+/**
+ * lightweight-charts v4 sarmalayıcı: mum + volume + duvar fiyat çizgileri.
+ *
+ * Çizim stratejisi (gerçek feed'e göre):
+ * - Veri kaynağı (symbol/timeframe) değiştiyse, pencere yapısı değiştiyse veya
+ *   zaman geriye sarıyorsa `setData()` ile tam çizim.
+ * - Aksi halde yalnızca son mum `update()` ile güncellenir.
+ * - Seriye hiçbir zaman eski zamanlı `update()` gönderilmez; bu yüzden
+ *   "Cannot update oldest data" hatası oluşamaz (bkz. lib/chartSync.ts).
+ * - Veri yokken uydurma mum çizilmez: bağlantı durumu açıkça gösterilir.
+ */
 
 interface LegendState {
   o: number
@@ -57,12 +69,28 @@ const toVolume = (c: Candle) => ({
   color: c.close >= c.open ? 'rgba(46, 230, 168, 0.35)' : 'rgba(255, 107, 107, 0.35)',
 })
 
-export default function CandleChart({ height = 340 }: { height?: number }) {
+const EMPTY_HINT: Record<FeedStatus, string> = {
+  connecting: 'Borsa bağlantısı kuruluyor…',
+  reconnecting: 'Bağlantı yeniden kuruluyor…',
+  live: 'Geçmiş mumlar borsadan alınıyor…',
+  offline: 'Canlı veriye ulaşılamıyor — borsa bağlantısı yok.',
+}
+
+export default function CandleChart({
+  height = 340,
+  onRetry,
+}: {
+  height?: number
+  onRetry?: () => void
+}) {
   const candles = useMarketStore((s) => s.candles)
+  const candlesRewriteSeq = useMarketStore((s) => s.candlesRewriteSeq)
   const walls = useMarketStore((s) => s.walls)
   const price = useMarketStore((s) => s.price)
   const symbol = useMarketStore((s) => s.symbol)
   const timeframe = useMarketStore((s) => s.timeframe)
+  const status = useMarketStore((s) => s.status)
+  const feedError = useMarketStore((s) => s.feedError)
   const coin = getCoin(symbol)
 
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -70,7 +98,7 @@ export default function CandleChart({ height = 340 }: { height?: number }) {
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const wallLinesRef = useRef(new Map<string, IPriceLine>())
-  const lastDataKeyRef = useRef('')
+  const syncRef = useRef(INITIAL_SYNC_STATE)
   const [legend, setLegend] = useState<LegendState | null>(null)
 
   // chart init (bir kez)
@@ -137,6 +165,8 @@ export default function CandleChart({ height = 340 }: { height?: number }) {
     chartRef.current = chart
     candleSeriesRef.current = candleSeries
     volumeSeriesRef.current = volumeSeries
+    // çizim geçmişi bu grafik örneğine bağlı: yeniden kurulumda sıfırlanmalı
+    syncRef.current = INITIAL_SYNC_STATE
     return () => {
       el.removeEventListener('dblclick', onDblClick)
       wallLines.clear()
@@ -144,28 +174,43 @@ export default function CandleChart({ height = 340 }: { height?: number }) {
       chartRef.current = null
       candleSeriesRef.current = null
       volumeSeriesRef.current = null
+      syncRef.current = INITIAL_SYNC_STATE
     }
   }, [])
 
-  // veri: coin/timeframe değişince tam setData, yoksa incremental update
+  // veri: plan çıkar → setData/update/clear uygula → planı commit et
   const dataKey = `${symbol}:${timeframe}`
   useEffect(() => {
     const series = candleSeriesRef.current
     const vol = volumeSeriesRef.current
-    if (!series || !vol || candles.length === 0) return
-    if (dataKey !== lastDataKeyRef.current) {
-      series.setData(candles.map(toChartCandle))
-      vol.setData(candles.map(toVolume))
-      for (const line of wallLinesRef.current.values()) series.removePriceLine(line)
-      wallLinesRef.current.clear()
-      lastDataKeyRef.current = dataKey
-      if (candles.length < 320) chartRef.current?.timeScale().fitContent()
-      return
+    if (!series || !vol) return
+    const prevKey = syncRef.current.key
+    const plan = planChartSync(syncRef.current, candles, dataKey, candlesRewriteSeq)
+    switch (plan.kind) {
+      case 'skip':
+        return
+      case 'clear': {
+        series.setData([])
+        vol.setData([])
+        for (const line of wallLinesRef.current.values()) series.removePriceLine(line)
+        wallLinesRef.current.clear()
+        break
+      }
+      case 'full': {
+        series.setData(candles.map(toChartCandle))
+        vol.setData(candles.map(toVolume))
+        // kaynak değişti veya pencere kısa → görünümü veriye sığdır
+        if (prevKey !== dataKey || candles.length < 320) chartRef.current?.timeScale().fitContent()
+        break
+      }
+      case 'tail': {
+        series.update(toChartCandle(plan.candle))
+        vol.update(toVolume(plan.candle))
+        break
+      }
     }
-    const last = candles[candles.length - 1]
-    series.update(toChartCandle(last))
-    vol.update(toVolume(last))
-  }, [candles, dataKey])
+    syncRef.current = commitChartSync(syncRef.current, plan, candles, dataKey, candlesRewriteSeq)
+  }, [candles, dataKey, candlesRewriteSeq])
 
   // duvar fiyat çizgileri (güç → opaklık)
   useEffect(() => {
@@ -211,14 +256,43 @@ export default function CandleChart({ height = 340 }: { height?: number }) {
     price ?? Number.NaN,
     coin.priceDecimals,
   )}, trend ${trendUp ? 'yukarı' : 'aşağı'}`
+  const noData = candles.length === 0
 
   return (
     <div className="relative" data-chart-root>
-      {candles.length === 0 && <Skeleton className="absolute inset-0 rounded-2xl" />}
+      {noData && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl bg-surface px-6 text-center"
+        >
+          {status === 'offline' ? (
+            <>
+              <WifiOff className="size-7 text-coral/80" aria-hidden />
+              <p className="text-sm font-medium text-text/85">{EMPTY_HINT.offline}</p>
+              {feedError && <p className="max-w-[280px] text-xs text-muted">{feedError}</p>}
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="mt-1 rounded-xl border border-line bg-surface-2 px-4 py-2 text-sm text-mint"
+                >
+                  Yeniden bağlan
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <Skeleton className="absolute inset-0 rounded-2xl" />
+              <p className="relative text-xs text-muted">{EMPTY_HINT[status]}</p>
+            </>
+          )}
+        </div>
+      )}
       <div
         ref={containerRef}
         style={{ height }}
-        className={candles.length === 0 ? 'invisible' : ''}
+        className={noData ? 'invisible' : ''}
         role="img"
         aria-label={ariaLabel}
       />

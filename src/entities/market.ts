@@ -8,6 +8,7 @@ export interface Candle {
   low: number
   close: number
   volume: number
+  /** Borsa mumu kapattı mı? (Binance `k.x`) Kapanmamış mum canlı güncellenir. */
   closed: boolean
 }
 
@@ -26,7 +27,11 @@ export interface BookSnapshot {
   lastUpdateId?: number
 }
 
-export type FeedStatus = 'connecting' | 'live' | 'demo' | 'reconnecting' | 'offline'
+/**
+ * Feed durumu — yalnızca gerçek bağlantının hâli.
+ * Veri üretilen bir "mod" yoktur; bağlantı yoksa uygulama boş kalır ve bunu açıkça söyler.
+ */
+export type FeedStatus = 'connecting' | 'live' | 'reconnecting' | 'offline'
 
 export interface Ticker {
   last: number
@@ -44,32 +49,35 @@ export type FeedEvent =
   | { type: 'ticker'; ticker: Ticker }
   | { type: 'history'; candles: Candle[] }
 
-/** Feed sözleşmesi: live ve demo feed'ler aynı arayüzü uygular. */
+/**
+ * Feed sözleşmesi: canlı borsa verisi.
+ * Tüm alanlar gerçek Binance WS/REST akışından gelir; üretilmiş veri yoktur.
+ */
 export interface MarketFeed {
   readonly symbol: string
   readonly timeframe: string
-  readonly mode: 'live' | 'demo'
+  readonly mode: 'live'
   start(): void
   stop(): void
   /** Sekme arka plandayken true (pil tasarrufu) */
   setPaused(p: boolean): void
-  /** Demo/offline'dan canlı veriye geçmeyi dener */
-  forceLive(): void
+  /** Kopmuş/offline feed'i hemen yeniden denemeye zorlar (kullanıcı aksiyonu). */
+  retryNow(): void
   on(handler: (e: FeedEvent) => void): () => void
 }
 
 export interface MarketFeedOptions {
   symbol: string
   timeframe: string
-  mode: 'auto' | 'live' | 'demo'
   wsBase?: string
+  /** Birincil WS host'una bağlanılamazsa sırayla denenecek gerçek borsa host'ları */
+  wsFallbacks?: string[]
   restBase?: string
-  seed?: number
+  /** Birincil REST host'u yanıt vermezse sırayla denenecek gerçek borsa host'ları */
+  restFallbacks?: string[]
   now?: () => number
-  tickMs?: number
-  candleMs?: number
-  maxLiveAttempts?: number
-  fallbackAfterMs?: number
-  /** demo feed: false → timer yok, tick() manuel çağrılır (test) */
-  timed?: boolean
+  /** REST'ten çekilecek geçmiş mum adedi (1..1000) */
+  historyLimit?: number
+  /** Bu kadar üst üste başarısız denemeden sonra status 'offline' olur (denemeler sürer) */
+  offlineAfterAttempts?: number
 }

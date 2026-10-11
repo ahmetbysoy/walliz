@@ -31,15 +31,12 @@ const pwa = VitePWA({
     navigateFallbackDenylist: [/^\/api\//],
     runtimeCaching: [
       {
-        urlPattern: ({ url }) => /api\.binance\.com|data-api\.binance\.com/.test(url.hostname),
-        handler: 'NetworkFirst',
+        // Borsa piyasa verisi ASLA önbellekten sunulmaz: eski mum/fiyat gösterip
+        // "canlı" izlenimi vermemek için yalnızca ağdan okunur. Çevrimdışıyken
+        // uygulama kabuğu açılır ve bağlantı durumu açıkça bildirilir.
+        urlPattern: ({ url }) => /(^|\.)binance\.com$|(^|\.)binance\.vision$/.test(url.hostname),
+        handler: 'NetworkOnly',
         method: 'GET',
-        options: {
-          cacheName: 'binance-rest',
-          networkTimeoutSeconds: 2,
-          expiration: { maxEntries: 64, maxAgeSeconds: 3600 },
-          cacheableResponse: { statuses: [0, 200] },
-        },
       },
     ],
   },

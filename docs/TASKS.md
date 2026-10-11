@@ -19,11 +19,11 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 
 ## Faz 2 — Veri
 
-- [x] T201 MarketFeed arayüzü + `createMarketFeed` fabrikası (auto/live/demo)
-- [x] T202 Demo feed: seed'li RNG (mulberry32), deterministik, 180 mum geçmiş, periyodik duvarlar
-- [x] T203 Live feed: combined WS (depth20@100ms + kline + ticker) + zod şemaları
+- [x] T201 MarketFeed arayüzü + `createMarketFeed` fabrikası (yalnız gerçek canlı veri; demo modu kaldırıldı — bkz. Faz 8)
+- [x] T202 ~~Demo feed~~ → **kaldırıldı** (simülasyon yasağı); yerine gerçek REST kline geçmişi + sıralama/birleştirme kuralları
+- [x] T203 Live feed: combined WS (depth20@100ms + kline + ticker) + zod şemaları + WS/REST host rotasyonu
 - [x] T204 Reconnect: exponential backoff (1→30s) + heartbeat 30s + visibility + network API
-- [x] T205 Demo ↔ Live otomatik geçiş + StatusPill (tıkla → forceLive)
+- [x] T205 Bağlantı durumu yönetimi (connecting/live/reconnecting/offline) + StatusPill (tıkla → retryNow)
 - [x] T206 Orderbook normalizasyonu (decimal.js-light, kümülatif derinlik) + test
 - [x] T207 marketStore (zustand) — feed event'leri → state + test
 - [x] T208 IndexedDB kalıcılık (idb-keyval) + v1→v2 migrasyon + 90 gün temizliği + test
@@ -43,7 +43,7 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 - [x] T402 PredictionModel (saf TS) — predict/learn/migrate/reset + test
 - [x] T403 Duvar tespiti (adaptif eşik, kümülatif pencere, WallTracker ömür) + test
 - [x] T404 Web Worker (duvar + feature) + inline fallback + test
-- [x] T405 Backtest script (`npm run backtest`, sentetik seri)
+- [x] T405 Backtest script (`npm run backtest`, **gerçek** Binance kline verisi; `KLINES_FILE` ile dosyadan)
 - [x] T406 `docs/MODEL.md` — model matematiği
 
 ## Faz 5 — UI/UX
@@ -60,11 +60,26 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 ## Faz 6 — Kalite
 
 - [x] T601 Unit testler (detectWalls, model, normalize, format, rng, buckets, migrasyon, store)
-- [x] T602 Integration testler (demo feed→store→UI, mock WS→state, backoff→fallback)
+- [x] T602 Integration testler (canlı feed tel formatı→store→UI, backoff/host rotasyonu, veri yokken üretim yok kontrolü)
 - [x] T603 E2E Playwright (iPhone 13 / Pixel 5 / Desktop) — sandbox'ta browser yok, CI'da çalışır
-- [x] T604 PWA: manifest + ikonlar (192/512/maskable) + SW (offline → demo)
+- [x] T604 PWA: manifest + ikonlar (192/512/maskable) + SW (kabuk önbellekte, borsa yanıtları NetworkOnly)
 - [x] T605 Performans: throttle, format cache, memo, lazy chart
 - [ ] T606 Lighthouse CI (Performance > 90, A11y > 95) — ⏸ (deploy sonrası)
+
+## Faz 8 — Gerçek veri & dayanıklılık (bu oturum)
+
+- [x] T801 `Cannot update oldest data, last time=[object Object], new time=[object Object]` çökmesinin kök nedeni
+      (series.update'e geriye giden zaman) ve kalıcı çözümü: `chart/lib/chartSync.ts` senkron planı
+- [x] T802 Mum penceresi sıralama garantisi (`shared/lib/candles.ts`): artan + tekil liste, geçmiş↔canlı birleştirme
+- [x] T803 Simülasyon/mock katmanının tamamen kaldırılması (demoFeed, demoRng, DEMO_* env/sabitler, 'demo' durumu)
+- [x] T804 Bağlantı dayanıklılığı: WS/REST host rotasyonu, ±%20 jitter'lı backoff, watchdog, sonsuz yeniden deneme
+- [x] T805 Ağ durumu entegrasyonu (online/offline olayları, `retryNow`) + `ConnectionNotice` uyarısı
+- [x] T806 Grafik boş durumu: veri yokken uydurma mum yerine durum mesajı + "Yeniden bağlan"
+- [x] T807 SW: borsa yanıtları NetworkOnly (eski fiyatı canlı gibi göstermeme)
+- [x] T808 Backtest'in gerçek Binance kline verisiyle çalışması (kitap feature'ları ablasyonla kapatılır)
+- [x] T809 Regresyon testleri: `planChartSync`, `upsertCandle`/`mergeHistory`, feed dayanıklılığı, veri uydurulmadığı kontrolü
+- [x] T810 Opt-in gerçek ağ testi (`LANKA_LIVE_NETWORK=1`)
+- [x] T811 Dokümantasyonun gerçek veri mimarisine güncellenmesi (SPEC/ARCHITECTURE/README/TASKS)
 
 ## Faz 7 — Yayın
 

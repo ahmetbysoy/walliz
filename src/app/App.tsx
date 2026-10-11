@@ -11,6 +11,7 @@ import { useLearningStore } from '@/shared/model/learningStore'
 import { useMarketStore } from '@/shared/model/marketStore'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { BottomNav } from './shell/BottomNav'
+import { ConnectionNotice } from './shell/ConnectionNotice'
 import { nextTab, type TabId } from './shell/tabs'
 import { Header } from './shell/Header'
 import { MetricsRow } from './shell/MetricsRow'
@@ -28,7 +29,7 @@ export function App() {
   const mainRef = useRef<HTMLElement | null>(null)
   const pullRef = useRef(0)
 
-  const { restart, forceLive } = useFeed(ready)
+  const { restart, retry } = useFeed(ready)
   useWallEngine(ready)
   usePrediction(ready)
 
@@ -94,7 +95,7 @@ export function App() {
       className="mx-auto flex min-h-dvh max-w-md flex-col bg-bg text-text sm:max-w-lg"
       {...bindGestures}
     >
-      <Header forceLive={forceLive} />
+      <Header onRetry={retry} />
 
       {pull > 0 && (
         <div className="flex justify-center text-muted" style={{ height: pull / 3 }} aria-hidden>
@@ -106,6 +107,11 @@ export function App() {
         {refreshing && (
           <div className="flex justify-center py-1" role="status" aria-label="Yenileniyor">
             <RefreshCw className="size-4 animate-spin text-mint" />
+          </div>
+        )}
+        {ready && (
+          <div className="mb-2 empty:hidden">
+            <ConnectionNotice onRetry={retry} />
           </div>
         )}
         {!ready ? (
@@ -125,7 +131,7 @@ export function App() {
                 <MetricsRow />
                 <div className="rounded-2xl border border-line bg-surface p-2">
                   <Suspense fallback={<Skeleton className="h-[340px]" />}>
-                    <CandleChart />
+                    <CandleChart onRetry={retry} />
                   </Suspense>
                 </div>
                 <PredictionCard />

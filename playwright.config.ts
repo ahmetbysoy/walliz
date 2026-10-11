@@ -15,8 +15,6 @@ export default defineConfig({
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
-    // E2E deterministik olsun: demo modda çalıştır
-    env: { VITE_DEMO_MODE: '1' },
   },
   projects: [
     { name: 'iphone-13', use: { ...devices['iPhone 13'] } },
