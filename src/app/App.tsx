@@ -54,47 +54,36 @@ export function App() {
     if (ready) void useLearningStore.getState().load(symbol)
   }, [ready, symbol])
 
-  // yatay swipe → tab geçişi
-  const bindSwipe = useDrag(
-    ({ last, offset: [dx] }) => {
-      if (!last || Math.abs(dx) < 60) return
-      setTab((t) => nextTab(t, dx > 0 ? -1 : 1))
-      haptic(10)
-    },
-    {
-      axis: 'x',
-      pointer: { touch: true },
-      filter: (e: Event) => !(e.target as HTMLElement | null)?.closest?.('[data-chart-root]'),
-    },
-  )
-
-  // yukarıdan çek → feed restart (pull-to-refresh)
-  const bindPull = useDrag(
-    ({ offset: [, y], last }) => {
+  // tek gestür bağlamı: yatay swipe → tab geçişi, üstteyken aşağı çek → pull-to-refresh
+  const bindGestures = useDrag(
+    ({ offset: [dx, y], last }) => {
       const el = mainRef.current
       const atTop = el ? el.scrollTop <= 0 : true
-      if (y > 0 && atTop && !refreshing) {
-        const p = Math.min(90, y * 0.4)
-        pullRef.current = p
-        setPull(p)
-      } else if (!last) {
-        pullRef.current = 0
-        setPull(0)
-      }
-      if (last) {
-        const wasPull = pullRef.current > 60
-        pullRef.current = 0
-        setPull(0)
-        if (wasPull && !refreshing) {
+      if (!last) {
+        if (y > 0 && atTop && !refreshing) {
+          const p = Math.min(90, y * 0.4)
+          pullRef.current = p
+          setPull(p)
+        } else if (pullRef.current !== 0) {
+          pullRef.current = 0
+          setPull(0)
+        }
+      } else {
+        if (Math.abs(dx) > 60 && Math.abs(y) < 40) {
+          setTab((t) => nextTab(t, dx > 0 ? -1 : 1))
+          haptic(10)
+        }
+        if (pullRef.current > 60 && !refreshing) {
           setRefreshing(true)
           haptic(20)
           restart()
           window.setTimeout(() => setRefreshing(false), 1000)
         }
+        pullRef.current = 0
+        setPull(0)
       }
     },
     {
-      axis: 'y',
       pointer: { touch: true },
       filter: (e: Event) => !(e.target as HTMLElement | null)?.closest?.('[data-chart-root]'),
     },
@@ -103,8 +92,7 @@ export function App() {
   return (
     <div
       className="mx-auto flex min-h-dvh max-w-md flex-col bg-bg text-text sm:max-w-lg"
-      {...bindSwipe}
-      {...bindPull}
+      {...bindGestures}
     >
       <Header forceLive={forceLive} />
 
