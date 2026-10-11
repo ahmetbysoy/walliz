@@ -67,7 +67,11 @@ Detay ve diyagram: `docs/ARCHITECTURE.md`.
 
 ## Yayın
 
-Statik build (Vercel/Netlify). CI: lint → test(coverage) → build → E2E (`.github/workflows/ci.yml`).
+Statik build (Vercel/Netlify).
+
+CI: lint → test(coverage) → build → E2E. Workflow dosyası bu oturumda kullanılan
+GitHub App'inin `workflows` yetkisi olmadığı için `ci/workflow.yml` altında duruyor —
+devreye almak için `ci/workflow.yml` → `.github/workflows/ci.yml` olarak taşıyın.
 
 ## Bilinçli Ertelenenler
 
