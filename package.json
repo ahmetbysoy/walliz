@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:live": "LANKA_LIVE_NETWORK=1 vitest run tests/integration/realBinance.test.ts",
     "test:e2e": "playwright test",
     "backtest": "tsx scripts/backtest.ts",
     "bundle:analyze": "ANALYZE=1 vite build",

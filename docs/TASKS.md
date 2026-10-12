@@ -81,6 +81,17 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 - [x] T810 Opt-in gerçek ağ testi (`LANKA_LIVE_NETWORK=1`)
 - [x] T811 Dokümantasyonun gerçek veri mimarisine güncellenmesi (SPEC/ARCHITECTURE/README/TASKS)
 
+## Faz 9 — CI / Actions / Codespaces (bu oturum)
+
+- [x] T901 İş yükü GitHub Actions'a taşındı: `ci/ci.yml` (quality + E2E, concurrency iptali, artifact'ler)
+- [x] T902 `ci/market-watch.yml`: günlük gerçek-veri nöbeti (tel formatı sözleşme testi + çok sembollü backtest + JSON rapor + iş özeti)
+- [x] T903 E2E dayanıklılığı: borsa erişimini önce yokla; erişim yoksa akış testleri atlanır, dürüst çevrimdışı testleri koşar (yanlış kırmızı yok)
+- [x] T904 `scripts/backtest.ts`: `SYMBOLS` (çok sembol) ve `REPORT_JSON` (CI artifact'i) desteği
+- [x] T905 `ci/enable-actions.sh` + `ci/README.md`: `workflows` izni engelinin 3 çözüm yolu
+- [x] T906 Codespaces: `.devcontainer/devcontainer.json` (Node 22, GH CLI, port yönlendirme, eklentiler) + README rozeti
+- [x] T907 Editör ayarları: `.vscode/settings.json`, `.vscode/extensions.json`
+- [x] T908 `npm run test:live` (canlı borsa sözleşme testi) + backtest çekirdeği için birim testleri
+
 ## Faz 7 — Yayın
 
 - [x] T701 CI (GitHub Actions): lint + test + build + e2e

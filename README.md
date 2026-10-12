@@ -1,5 +1,7 @@
 # LANKA v2
 
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ahmetbysoy/walliz)
+
 Orderbook duvarlarını gerçek zamanlı izleyen, coin bazlı öğrenen, **mobil öncelikli** piyasa ekranı.
 
 - **Gerçek piyasa verisi** — Binance birleşik stream (`depth20@100ms` + `kline` + `ticker`) ve
@@ -79,13 +81,36 @@ motoruna geriye giden zaman gönderilmez.
   durum, coin/timeframe değişimi, tab navigasyonu, pull-to-refresh
 - **Backtest**: `npm run backtest` — gerçek kline verisi (ağ yoksa `KLINES_FILE` ile dosyadan)
 
+## CI, Actions ve Codespaces
+
+İş yükünün dağılımı bilinçli:
+
+| Ortam              | İş                                                                                | Neden                                                                           |
+| ------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **GitHub Actions** | Kalite kapıları (lint/format/test/build), E2E, **günlük gerçek-veri doğrulaması** | Koşucuda gerçek tarayıcı var; zamanlanmış işler repoda kanıt (artifact) bırakır |
+| **Codespaces**     | Elle QA, Lighthouse, mobil cihaz testi, Playwright UI mode                        | Etkileşimli; `.devcontainer` ile tek tıkla aynı ortam                           |
+| **Yerel**          | Günlük geliştirme döngüsü                                                         | En hızlı geri bildirim                                                          |
+
+İki iş akışı `ci/` altında hazır:
+
+- **`ci/ci.yml`** — her push/PR: `quality` (lint → format → `test:coverage` → build) + `e2e`
+  (Chromium; borsa erişimini önce **yoklar**, erişilebilirse gerçek veri testleri koşar,
+  erişilemezse çevrimdışı dürüstlük testleri koşar ve özete ⚠️ notu düşer).
+- **`ci/market-watch.yml`** — günde bir (05:10 UTC) ve elle: gerçek Binance verisiyle
+  tel-formatı sözleşme testi + çok sembollü backtest → `market-watch-report.json` artifact'i
+  ve markdown özet. Borsaya erişilemezse **hiçbir sonuç uydurulmaz**; koşu bunu açıkça bildirir.
+
+> **Devreye alma:** `.github/workflows/*` dosyalarını bu oturumdaki GitHub App push edemiyor
+> (`workflows` izni yok). Tek komut: `bash ci/enable-actions.sh` + `git push`.
+> Alternatifler ve ayrıntı: [`ci/README.md`](ci/README.md).
+
+Codespaces: **Code → Codespaces → Create codespace** (bölge **WestEurope** önerilir — borsa
+erişimi ve gecikme açısından). `.devcontainer` Node 22, GitHub CLI, ESLint/Prettier/Tailwind/
+Playwright eklentilerini kurar, 5173/4173 portlarını yönlendirir ve uygulamayı başlatır.
+
 ## Yayın
 
-Statik build (Vercel/Netlify).
-
-CI: lint → test(coverage) → build → E2E. Workflow dosyası bu oturumda kullanılan
-GitHub App'inin `workflows` yetkisi olmadığı için `ci/workflow.yml` altında duruyor —
-devreye almak için `ci/workflow.yml` → `.github/workflows/ci.yml` olarak taşıyın.
+Statik build (Vercel/Netlify) — Actions'tan bağımsız çalışır.
 
 ## Bilinçli Ertelenenler
 

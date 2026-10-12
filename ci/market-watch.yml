@@ -1,0 +1,138 @@
+name: Piyasa Nöbeti (gerçek veri)
+
+# Sürekli doğrulama: gerçek Binance verisiyle (a) tel formatı sözleşmesi ve
+# (b) model backtest metrikleri. Uydurma/simüle veri ÜRETİLMEZ; borsaya erişilemezse
+# iş bunu açıkça bildirir ve gerçek veri doğrulamasının yapılamadığını summary'e yazar.
+
+on:
+  schedule:
+    # Her gün 05:10 UTC (08:10 TR)
+    - cron: '10 5 * * *'
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: 'Virgülle ayrılmış semboller'
+        required: false
+        default: 'BTCUSDT,ETHUSDT,SOLUSDT'
+      interval:
+        description: 'Mum aralığı (1m, 5m, 15m, 1h)'
+        required: false
+        default: '1m'
+      candles:
+        description: 'Sembol başına mum sayısı'
+        required: false
+        default: '3000'
+
+concurrency:
+  group: market-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  real-market:
+    name: Gerçek piyasa verisi doğrulaması + backtest
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      - name: Borsa erişimini yokla
+        id: probe
+        run: |
+          set -euo pipefail
+          reachable=""
+          for host in https://api.binance.com https://data-api.binance.vision; do
+            code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "$host/api/v3/ping" || true)
+            echo "$host → HTTP $code"
+            if [ "$code" = "200" ] && [ -z "$reachable" ]; then reachable="$host"; fi
+          done
+          if [ -n "$reachable" ]; then
+            echo "reachable=$reachable" >> "$GITHUB_OUTPUT"
+            echo "VITE_BINANCE_REST=$reachable" >> "$GITHUB_ENV"
+            echo "REST_HOSTS=$reachable,https://data-api.binance.vision" >> "$GITHUB_ENV"
+            echo "### Borsa: \`$reachable\` ✅" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "reachable=" >> "$GITHUB_OUTPUT"
+            echo "::warning::Gerçek borsa uç noktalarına erişilemedi (bölgesel engel olabilir). Gerçek veri doğrulaması YAPILAMADI; sahte sonuç üretilmedi."
+            {
+              echo "### Borsa: erişilemedi ⚠️"
+              echo ""
+              echo "Bu çalıştırmada gerçek veri doğrulaması **yapılamadı** (koşucu bölgesinden"
+              echo "borsa uç noktaları engelli). Hiçbir sonuç uydurulmadı; yeniden denemek için"
+              echo "iş akışını elle tetikleyin veya bir Codespace (WestEurope) üzerinden çalıştırın."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Gerçek ağ sözleşme testi (Binance tel formatı)
+        if: steps.probe.outputs.reachable != ''
+        env:
+          LANKA_LIVE_NETWORK: '1'
+        run: npx vitest run tests/integration/realBinance.test.ts
+
+      - name: Gerçek veriyle backtest (JSON raporlu)
+        if: steps.probe.outputs.reachable != ''
+        env:
+          SYMBOLS: ${{ inputs.symbols || 'BTCUSDT,ETHUSDT,SOLUSDT' }}
+          INTERVAL: ${{ inputs.interval || '1m' }}
+          N: ${{ inputs.candles || '3000' }}
+          REPORT_JSON: market-watch-report.json
+        run: npm run backtest
+
+      - name: Sonuç özeti (job summary)
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ ! -f market-watch-report.json ]; then
+            echo "_Backtest raporu üretilemedi (borsa erişimi yok)._"
+            exit 0
+          fi
+          node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const fs = require('node:fs')
+          const data = JSON.parse(fs.readFileSync('market-watch-report.json', 'utf8'))
+          console.log('## Piyasa nöbeti — gerçek veri\n')
+          console.log(`Kaynak: \`${data.source}\` · üretim: ${data.generatedAt}\n`)
+          if (data.reports.length === 0) {
+            console.log('### ⚠️ Hiçbir sembol için gerçek veri alınamadı\n')
+            for (const e of data.errors) console.log(`- \`${e.symbol}\`: ${e.message}`)
+            console.log('\n_Sonuç uydurulmadı; borsa erişimini kontrol edin._')
+          } else {
+            console.log('| Sembol | Mum | Karar | İsabet | Nötr | Son fiyat |')
+            console.log('| --- | ---: | ---: | ---: | ---: | ---: |')
+            for (const r of data.reports) {
+              console.log(
+                `| ${r.symbol} ${r.interval} | ${r.candles} | ${r.decisions} | ` +
+                  `${(r.hitRate * 100).toFixed(1)}% | ${r.neutrals} | ${r.lastPrice} |`,
+              )
+            }
+            if (data.errors.length > 0) {
+              console.log('\n### Alınamayan semboller')
+              for (const e of data.errors) console.log(`- \`${e.symbol}\`: ${e.message}`)
+            }
+            console.log(
+              `\n_Kitap türevi feature'lar (${data.ablation.join(', ')}) geçmiş veride ` +
+                `bulunmadığı için ablasyonla kapatıldı._`,
+            )
+          }
+          NODE
+
+      - name: Raporu yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-watch-report
+          path: market-watch-report.json
+          if-no-files-found: warn
+          retention-days: 30

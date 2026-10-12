@@ -2,9 +2,11 @@
  * Backtest — GERÇEK borsa verisiyle (Binance `/api/v3/klines`).
  *
  * Kullanım:
- *   npm run backtest                                  → BTCUSDT 1m, 3000 mum
+ *   npm run backtest                                   → BTCUSDT 1m, 3000 mum
  *   SYMBOL=ETHUSDT INTERVAL=5m N=10000 npm run backtest
- *   KLINES_FILE=/veri/btcusdt-1m.json npm run backtest  → indirilmiş gerçek kline dosyası
+ *   SYMBOLS=BTCUSDT,ETHUSDT,SOLUSDT npm run backtest   → çok sembollü tarama
+ *   KLINES_FILE=/veri/btcusdt-1m.json npm run backtest → indirilmiş gerçek kline dosyası
+ *   REPORT_JSON=rapor.json npm run backtest            → makine okunur JSON raporu (CI artifact'i)
  *
  * Önemli — veri kaynağı:
  * - Simülasyon/sentetik seri ÜRETİLMEZ. Veri yoksa script hata verip çıkar (exit 1).
@@ -14,6 +16,7 @@
  *   yalnızca fiyat türevi feature'larla (momentum, trend, volatility) ölçüm yapar.
  *   Bu, modelin kitap verisi olmadan ne yaptığını dürüstçe ölçer.
  */
+import { writeFileSync } from 'node:fs'
 import type { Candle, FeatureKey, FeatureVector } from '../src/entities'
 import { computePriceFeatures } from '../src/shared/lib/features'
 import { klineUrl, parseKlineRows } from '../src/shared/lib/klines'
@@ -27,9 +30,14 @@ import {
 } from '../src/shared/lib/model'
 
 const SYMBOL = process.env.SYMBOL ?? 'BTCUSDT'
+const SYMBOLS = (process.env.SYMBOLS ?? SYMBOL)
+  .split(',')
+  .map((s) => s.trim().toUpperCase())
+  .filter(Boolean)
 const INTERVAL = process.env.INTERVAL ?? '1m'
 const N = Number(process.env.N ?? 3000)
 const KLINES_FILE = process.env.KLINES_FILE ?? ''
+const REPORT_JSON = process.env.REPORT_JSON ?? ''
 const REST_HOSTS = (
   process.env.REST_HOSTS ?? 'https://api.binance.com,https://data-api.binance.vision'
 )
@@ -48,15 +56,57 @@ const PAGE_LIMIT = 1000
 /** Kitap türevi feature'lar — geçmiş veride yok, ablasyonla kapatılır. */
 const BOOK_FEATURES: FeatureKey[] = ['imbalance', 'wallPressure']
 
+/** Isınma sonrası ölçülen mum sayısı */
+export const MEASURED_AFTER_WARMUP = Math.max(WARMUP, WINDOW)
+
+export interface BandStat {
+  total: number
+  hits: number
+}
+
+export interface BacktestReport {
+  symbol: string
+  interval: string
+  candles: number
+  from: string
+  to: string
+  lastPrice: number
+  /** Ölçülen karar sayısı (isabet + ıskalama) */
+  decisions: number
+  hits: number
+  misses: number
+  neutrals: number
+  /** isabet / karar */
+  hitRate: number
+  bands: Record<string, BandStat & { hitRate: number }>
+  weights: Record<string, number>
+  skipped: number
+}
+
+export interface BacktestBundle {
+  source: string
+  generatedAt: string
+  interval: string
+  ablation: string[]
+  reports: BacktestReport[]
+  errors: { symbol: string; message: string }[]
+}
+
+const iso = (sec: number): string =>
+  new Date(sec * 1000).toISOString().replace('T', ' ').slice(0, 19)
+
+// ─────────────────────────── gerçek veri çekimi ───────────────────────────
+
 async function requestPage(
   host: string,
+  symbol: string,
   limit: number,
   endTimeMs: number | undefined,
 ): Promise<unknown[]> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15_000)
   try {
-    const res = await fetch(klineUrl(host, SYMBOL, INTERVAL, limit, endTimeMs), {
+    const res = await fetch(klineUrl(host, symbol, INTERVAL, limit, endTimeMs), {
       signal: controller.signal,
     })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -69,7 +119,7 @@ async function requestPage(
 }
 
 /** Sayfalanmış gerçek kline çekimi (en yeniden geriye doğru, sonra kronolojik sıralama). */
-async function fetchRealKlines(): Promise<Candle[]> {
+async function fetchRealKlines(symbol: string): Promise<Candle[]> {
   const collected = new Map<number, Candle>()
   let endTimeMs: number | undefined = Date.now()
   let hostIndex = 0
@@ -81,7 +131,7 @@ async function fetchRealKlines(): Promise<Candle[]> {
     for (let i = 0; i < REST_HOSTS.length; i++) {
       const host = REST_HOSTS[(hostIndex + i) % REST_HOSTS.length]
       try {
-        const rows = await requestPage(host, limit, endTimeMs)
+        const rows = await requestPage(host, symbol, limit, endTimeMs)
         const parsed = parseKlineRows(rows, Date.now())
         if (parsed.length === 0) throw new Error('boş/geçersiz sayfa')
         hostIndex = (hostIndex + i) % REST_HOSTS.length
@@ -95,9 +145,8 @@ async function fetchRealKlines(): Promise<Candle[]> {
       throw new Error(`gerçek kline verisi alınamadı (${lastError || 'bilinmeyen hata'})`)
     }
     for (const c of page) collected.set(c.time, c)
-    const oldest = page[0].time * 1000
-    endTimeMs = oldest - 1
-    process.stdout.write(`\r  çekilen mum: ${collected.size}/${N}`)
+    endTimeMs = page[0].time * 1000 - 1
+    process.stdout.write(`\r  ${symbol}: çekilen mum ${collected.size}/${N}`)
     if (page.length < limit) break
   }
   process.stdout.write('\n')
@@ -121,43 +170,21 @@ async function readKlinesFile(path: string): Promise<Candle[]> {
   return parseKlineRows(rows, Date.now())
 }
 
-function iso(sec: number): string {
-  return new Date(sec * 1000).toISOString().replace('T', ' ').slice(0, 19)
-}
+// ─────────────────────────── model koşusu ───────────────────────────
 
-async function main() {
-  console.log('── LANKA backtest — GERÇEK piyasa verisi ─────────')
-  const t0 = Date.now()
-  const candles = KLINES_FILE ? await readKlinesFile(KLINES_FILE) : await fetchRealKlines()
-  if (candles.length < WARMUP + WINDOW) {
-    throw new Error(
-      `yeterli gerçek veri yok (${candles.length} mum) — ağ erişimi ya da KLINES_FILE gerekli`,
-    )
-  }
-  console.log(`kaynak       : ${KLINES_FILE ? `dosya (${KLINES_FILE})` : REST_HOSTS.join(' / ')}`)
-  console.log(`sembol/aralık: ${SYMBOL} ${INTERVAL}`)
-  console.log(
-    `mum          : ${candles.length} adet · ${iso(candles[0].time)} → ${iso(candles[candles.length - 1].time)}`,
-  )
-  console.log(`son fiyat    : ${candles[candles.length - 1].close}`)
-  console.log(`çekme süresi : ${((Date.now() - t0) / 1000).toFixed(1)} sn`)
-  console.log(
-    `ablasyon     : ${BOOK_FEATURES.map((k) => FEATURE_LABELS[k]).join(', ')} devre dışı ` +
-      '(geçmiş orderbook derinliği public API\u2019de yok)',
-  )
-
+export function runBacktest(symbol: string, candles: Candle[]): BacktestReport {
   let weights = createInitialWeights().values
   let hits = 0
   let misses = 0
   let neutrals = 0
   let skipped = 0
-  const bandStats: Record<string, { total: number; hits: number }> = {
+  const bandStats: Record<string, BandStat> = {
     high: { total: 0, hits: 0 },
     medium: { total: 0, hits: 0 },
     low: { total: 0, hits: 0 },
   }
 
-  for (let i = Math.max(WARMUP, WINDOW); i < candles.length; i++) {
+  for (let i = MEASURED_AFTER_WARMUP; i < candles.length; i++) {
     const window = candles.slice(i - WINDOW, i)
     const priceFeatures = computePriceFeatures({ candles: window, atrPeriod: FEATURE_PERIOD })
     const atrValue = atr(window, FEATURE_PERIOD)
@@ -196,25 +223,118 @@ async function main() {
     for (const k of BOOK_FEATURES) weights[k] = 0
   }
 
-  const decided = hits + misses
-  console.log('')
-  console.log(`ölçülen mum  : ${candles.length - Math.max(WARMUP, WINDOW)} (atlanan: ${skipped})`)
-  console.log(
-    `sonuç        : isabet=${hits} ıskalama=${misses} nötr=${neutrals} → isabet %${
-      decided ? ((hits / decided) * 100).toFixed(1) : '—'
-    } (${decided} karar)`,
-  )
+  const decisions = hits + misses
+  const bands: BacktestReport['bands'] = {}
   for (const [band, s] of Object.entries(bandStats)) {
-    const rate = s.total ? ((s.hits / s.total) * 100).toFixed(1) : '—'
-    console.log(`  kova ${band.padEnd(6)} ${String(s.total).padStart(5)} tahmin · isabet %${rate}`)
+    bands[band] = { ...s, hitRate: s.total > 0 ? s.hits / s.total : 0 }
+  }
+
+  const first = candles[0]
+  const last = candles[candles.length - 1]
+  const weightsOut: Record<string, number> = {}
+  for (const k of FEATURE_KEYS) weightsOut[k] = weights[k]
+
+  return {
+    symbol,
+    interval: INTERVAL,
+    candles: candles.length,
+    from: first ? iso(first.time) : '',
+    to: last ? iso(last.time) : '',
+    lastPrice: last ? last.close : 0,
+    decisions,
+    hits,
+    misses,
+    neutrals,
+    hitRate: decisions > 0 ? hits / decisions : 0,
+    bands,
+    weights: weightsOut,
+    skipped,
+  }
+}
+
+function printReport(r: BacktestReport): void {
+  console.log('')
+  console.log(`── ${r.symbol} ${r.interval} ─────────────────────────────`)
+  console.log(`mum          : ${r.candles} adet · ${r.from} → ${r.to}`)
+  console.log(`son fiyat    : ${r.lastPrice}`)
+  console.log(`ölçülen mum  : ${r.candles - MEASURED_AFTER_WARMUP} (atlanan: ${r.skipped})`)
+  console.log(
+    `sonuç        : isabet=${r.hits} ıskalama=${r.misses} nötr=${r.neutrals} → isabet %${
+      r.decisions ? (r.hitRate * 100).toFixed(1) : '—'
+    } (${r.decisions} karar)`,
+  )
+  for (const [band, s] of Object.entries(r.bands)) {
+    console.log(
+      `  kova ${band.padEnd(6)} ${String(s.total).padStart(5)} tahmin · isabet %${
+        s.total ? (s.hitRate * 100).toFixed(1) : '—'
+      }`,
+    )
   }
   console.log('son ağırlıklar (ablasyon uygulanmış):')
   for (const k of FEATURE_KEYS)
-    console.log(`  ${FEATURE_LABELS[k].padEnd(14)} ${weights[k].toFixed(4)}`)
+    console.log(`  ${FEATURE_LABELS[k].padEnd(14)} ${(r.weights[k] ?? 0).toFixed(4)}`)
 }
 
-main().catch((err: unknown) => {
-  console.error(`\nbacktest başarısız: ${err instanceof Error ? err.message : String(err)}`)
-  console.error('İpucu: ağ erişimi yoksa gerçek kline dosyasını KLINES_FILE ile verin.')
-  process.exitCode = 1
-})
+async function main(): Promise<void> {
+  console.log('── LANKA backtest — GERÇEK piyasa verisi ─────────')
+  const t0 = Date.now()
+  const source = KLINES_FILE ? `dosya:${KLINES_FILE}` : REST_HOSTS.join(',')
+  console.log(`kaynak       : ${source}`)
+  console.log(`semboller    : ${KLINES_FILE ? SYMBOL : SYMBOLS.join(', ')} · aralık: ${INTERVAL}`)
+  console.log(
+    `ablasyon     : ${BOOK_FEATURES.map((k) => FEATURE_LABELS[k]).join(', ')} devre dışı (geçmiş orderbook derinliği public API'de yok)`,
+  )
+
+  const reports: BacktestReport[] = []
+  const errors: BacktestBundle['errors'] = []
+  const targets = KLINES_FILE ? [SYMBOL] : SYMBOLS
+
+  for (const symbol of targets) {
+    try {
+      const candles = KLINES_FILE
+        ? await readKlinesFile(KLINES_FILE)
+        : await fetchRealKlines(symbol)
+      if (candles.length < MEASURED_AFTER_WARMUP + 10) {
+        throw new Error(`yeterli gerçek veri yok (${candles.length} mum)`)
+      }
+      const report = runBacktest(symbol, candles)
+      reports.push(report)
+      printReport(report)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      errors.push({ symbol, message })
+      console.error(`\n${symbol} için backtest yapılamadı: ${message}`)
+    }
+  }
+
+  console.log(`\ntoplam süre  : ${((Date.now() - t0) / 1000).toFixed(1)} sn`)
+
+  if (REPORT_JSON) {
+    const bundle: BacktestBundle = {
+      source,
+      generatedAt: new Date().toISOString(),
+      interval: INTERVAL,
+      ablation: BOOK_FEATURES.map((k) => FEATURE_LABELS[k]),
+      reports,
+      errors,
+    }
+    writeFileSync(REPORT_JSON, `${JSON.stringify(bundle, null, 2)}\n`, 'utf8')
+    console.log(`rapor yazıldı: ${REPORT_JSON} (${reports.length} rapor, ${errors.length} hata)`)
+  }
+
+  if (reports.length === 0) {
+    throw new Error(
+      `hiçbir sembol için gerçek veri alınamadı — ${errors.map((e) => `${e.symbol}: ${e.message}`).join(' | ')}`,
+    )
+  }
+}
+
+// Vitest altında modül import edilebilir kalmalı (runBacktest birim testleri);
+// script yalnızca doğrudan çalıştırıldığında ağ isteği yapar.
+if (!process.env.VITEST) {
+  main().catch((err: unknown) => {
+    console.error(`\nbacktest başarısız: ${err instanceof Error ? err.message : String(err)}`)
+    console.error('İpucu: ağ erişimi yoksa gerçek kline dosyasını KLINES_FILE ile verin.')
+    process.exitCode = 1
+  })
+}
