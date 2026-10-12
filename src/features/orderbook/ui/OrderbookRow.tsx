@@ -12,27 +12,32 @@ export interface OrderbookRowProps {
   maxTotal: number
   decimals: number
   isWall: boolean
-  onLongPress: (level: BookLevel, side: WallSide) => void
+  onSelect: (level: BookLevel, side: WallSide) => void
 }
 
-/** React.memo: 20 satırın her tick'te yeniden render'ı önlenir. */
+/** React.memo: 20 satırın her tick'te gereksiz render'ı önlenir. */
 export const OrderbookRow = memo(function OrderbookRow({
   level,
   side,
   maxTotal,
   decimals,
   isWall,
-  onLongPress,
+  onSelect,
 }: OrderbookRowProps) {
-  const bind = useLongPress(() => onLongPress(level, side))
+  const bind = useLongPress(() => onSelect(level, side))
   const pct = maxTotal > 0 ? Math.min(100, (level.total / maxTotal) * 100) : 0
+
   return (
     <div
       {...bind}
+      onClick={() => onSelect(level, side)}
+      role="button"
+      tabIndex={0}
+      aria-label={`${side === 'bid' ? 'Alış' : 'Satış'} seviyesi: ${formatPrice(level.price, decimals)}, hacim: ${formatCompact(level.qty)}${isWall ? ' (Duvar)' : ''}`}
       className={twMerge(
         clsx(
-          'relative flex h-7 select-none items-center justify-between px-3 text-xs tabular-nums touch-manipulation',
-          isWall && (side === 'bid' ? 'bg-mint/10' : 'bg-coral/10'),
+          'relative flex h-7 select-none cursor-pointer items-center justify-between px-3 text-xs tabular-nums transition-colors hover:bg-surface-2/60 active:bg-surface-2',
+          isWall && (side === 'bid' ? 'bg-mint/10 font-medium' : 'bg-coral/10 font-medium'),
         ),
       )}
     >

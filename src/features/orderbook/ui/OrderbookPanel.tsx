@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
-import { BookOpen, Radar } from 'lucide-react'
+import { BookOpen, Radar, Bell } from 'lucide-react'
+import { toast } from 'sonner'
 import type { BookLevel, WallSide } from '@/entities'
 import { getCoin } from '@/shared/config/coins'
 import { formatCompact, formatPct, formatPrice } from '@/shared/lib/format'
 import { haptic } from '@/shared/lib/haptics'
 import { useMarketStore } from '@/shared/model/marketStore'
+import { Button } from '@/shared/ui/Button'
 import { Card, CardTitle } from '@/shared/ui/Card'
 import { EmptyState } from '@/shared/ui/EmptyState'
 import { Sheet } from '@/shared/ui/Sheet'
@@ -18,12 +20,7 @@ export function OrderbookPanel() {
   const [detail, setDetail] = useState<{ level: BookLevel; side: WallSide } | null>(null)
 
   const wallByPrice = useMemo(() => new Map(walls.map((w) => [`${w.side}:${w.price}`, w])), [walls])
-  /**
-   * Derinlik çubuklarının oranlanacağı tepe değer: her taraftaki **kümülatif toplamın
-   * en büyüğü** (listenin son seviyesi — `normalizeBookRows` kümülatifi en iyi fiyattan
-   * dışa doğru biriktirir). İlk seviyelerin toplamı en küçük olduğu için onları baz almak
-   * bütün çubukları tavana yapıştırırdı.
-   */
+
   const maxTotal = useMemo(() => {
     if (!book) return 0
     const bidDepth = book.bids[book.bids.length - 1]?.total ?? 0
@@ -45,9 +42,20 @@ export function OrderbookPanel() {
   const bestAsk = book.asks[0].price
   const spread = bestAsk - bestBid
   const spreadPct = bestAsk / bestBid - 1
+
   const openDetail = (level: BookLevel, side: WallSide) => {
     haptic(15)
     setDetail({ level, side })
+  }
+
+  const setPriceAlert = () => {
+    if (!detail) return
+    const formatted = formatPrice(detail.level.price, coin.priceDecimals)
+    toast.success(`🔔 Fiyat uyarısı kuruldu: ${formatted} (uygulama açıkken)`, {
+      description: `${coin.base} fiyatı bu seviyeye ulaştığında bildirim verilecek.`,
+    })
+    haptic([20, 40])
+    setDetail(null)
   }
 
   return (
@@ -75,7 +83,7 @@ export function OrderbookPanel() {
               maxTotal={maxTotal}
               decimals={coin.priceDecimals}
               isWall={wallByPrice.has(`bid:${l.price}`)}
-              onLongPress={openDetail}
+              onSelect={openDetail}
             />
           ))}
         </div>
@@ -89,7 +97,7 @@ export function OrderbookPanel() {
               maxTotal={maxTotal}
               decimals={coin.priceDecimals}
               isWall={wallByPrice.has(`ask:${l.price}`)}
-              onLongPress={openDetail}
+              onSelect={openDetail}
             />
           ))}
         </div>
@@ -104,10 +112,11 @@ export function OrderbookPanel() {
             {walls.map((w) => (
               <li
                 key={`${w.side}-${w.price}`}
-                className="flex items-center justify-between rounded-lg bg-surface-2/60 px-3 py-2 text-xs tabular-nums"
+                onClick={() => openDetail({ price: w.price, qty: w.qty, total: w.qty }, w.side)}
+                className="flex cursor-pointer items-center justify-between rounded-lg bg-surface-2/60 px-3 py-2 text-xs tabular-nums hover:bg-surface-2 transition-colors active:scale-[0.99]"
               >
-                <span className={w.side === 'bid' ? 'text-mint' : 'text-coral'}>
-                  {w.side === 'bid' ? 'DESTEK' : 'DİRENÇ'}{' '}
+                <span className={w.side === 'bid' ? 'text-mint font-medium' : 'text-coral font-medium'}>
+                  {w.side === 'bid' ? 'DESTEK DUVARI' : 'DİRENÇ DUVARI'}{' '}
                   {formatPrice(w.price, coin.priceDecimals)}
                 </span>
                 <span className="flex items-center gap-2 text-muted">
@@ -125,14 +134,26 @@ export function OrderbookPanel() {
       <Sheet
         open={detail !== null}
         onOpenChange={(o) => !o && setDetail(null)}
-        title="Seviye Detayı"
+        title="Seviye Detayı & Fiyat Uyarısı"
       >
         {detail && (
-          <div className="flex flex-col gap-2 text-sm tabular-nums">
-            <DetailRow k="Fiyat" v={formatPrice(detail.level.price, coin.priceDecimals)} />
-            <DetailRow k="Seviye hacmi" v={formatCompact(detail.level.qty)} />
-            <DetailRow k="Kümülatif derinlik" v={formatCompact(detail.level.total)} />
-            <DetailRow k="Taraf" v={detail.side === 'bid' ? 'Alış (destek)' : 'Satış (direnç)'} />
+          <div className="flex flex-col gap-4 text-sm tabular-nums">
+            <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface-2/40 p-3">
+              <DetailRow k="Fiyat" v={formatPrice(detail.level.price, coin.priceDecimals)} />
+              <DetailRow k="Seviye hacmi" v={formatCompact(detail.level.qty)} />
+              <DetailRow k="Kümülatif derinlik" v={formatCompact(detail.level.total)} />
+              <DetailRow k="Taraf" v={detail.side === 'bid' ? 'Alış (Alıcı / Destek)' : 'Satış (Satıcı / Direnç)'} />
+            </div>
+
+            <Button
+              variant="primary"
+              size="md"
+              onClick={setPriceAlert}
+              className="w-full flex items-center justify-center gap-2"
+            >
+              <Bell className="size-4" />
+              <span>Bu Fiyata Uyarı Kur (uygulama açıkken)</span>
+            </Button>
           </div>
         )}
       </Sheet>
@@ -142,8 +163,8 @@ export function OrderbookPanel() {
 
 function DetailRow({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex justify-between border-b border-line/60 pb-2">
-      <span className="text-muted">{k}</span>
+    <div className="flex justify-between border-b border-line/60 pb-1.5 last:border-b-0 last:pb-0">
+      <span className="text-muted text-xs">{k}</span>
       <span className="font-medium text-text">{v}</span>
     </div>
   )

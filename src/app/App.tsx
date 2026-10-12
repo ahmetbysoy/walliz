@@ -1,12 +1,10 @@
-import { Suspense, lazy, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState, useCallback } from 'react'
 import { useDrag } from '@use-gesture/react'
 import { RefreshCw } from 'lucide-react'
 import { OrderbookPanel } from '@/features/orderbook/ui/OrderbookPanel'
-import { PyramidPanel } from '@/features/pyramid/ui/PyramidPanel'
-import { LearningPanel } from '@/features/learning-memory/ui/LearningPanel'
 import { PredictionCard } from '@/features/prediction/ui/PredictionCard'
 import { loadPreferences } from '@/shared/lib/learningRepo'
-import { haptic } from '@/shared/lib/haptics'
+import { haptic, setHapticsEnabled } from '@/shared/lib/haptics'
 import { useLearningStore } from '@/shared/model/learningStore'
 import { useMarketStore } from '@/shared/model/marketStore'
 import { Skeleton } from '@/shared/ui/Skeleton'
@@ -15,9 +13,11 @@ import { ConnectionNotice } from './shell/ConnectionNotice'
 import { nextTab, type TabId } from './shell/tabs'
 import { Header } from './shell/Header'
 import { MetricsRow } from './shell/MetricsRow'
+import { ModelPanel } from './shell/ModelPanel'
 import { useFeed } from './shell/useFeed'
 import { usePrediction } from './shell/usePrediction'
 import { useWallEngine } from './shell/useWallEngine'
+import { useWallAlerts } from './shell/useWallAlerts'
 
 const CandleChart = lazy(() => import('@/features/chart/ui/CandleChart'))
 
@@ -26,14 +26,17 @@ export function App() {
   const [tab, setTab] = useState<TabId>('grafik')
   const [pull, setPull] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
+  const [headerVisible, setHeaderVisible] = useState(true)
   const mainRef = useRef<HTMLElement | null>(null)
   const pullRef = useRef(0)
+  const lastScrollTopRef = useRef(0)
 
   const { restart, retry } = useFeed(ready)
   useWallEngine(ready)
   usePrediction(ready)
+  useWallAlerts(ready)
 
-  // tercihleri yükle (ilk feed'den ÖNCE)
+  // Tercihleri yükle (ilk feed'den ÖNCE)
   useEffect(() => {
     let cancelled = false
     void loadPreferences().then((p) => {
@@ -41,6 +44,8 @@ export function App() {
       const st = useMarketStore.getState()
       st.reset(p.symbol, p.timeframe)
       if (p.colorblind) document.documentElement.dataset.colorblind = 'on'
+      if (p.theme === 'light') document.documentElement.dataset.theme = 'light'
+      if (p.haptics != null) setHapticsEnabled(p.haptics)
       void useLearningStore.getState().load(p.symbol)
       setReady(true)
     })
@@ -49,13 +54,30 @@ export function App() {
     }
   }, [])
 
-  // sembol değişince o sembolün öğrenme verisini yükle
+  // Sembol değişince o sembolün öğrenme verisini yükle
   const symbol = useMarketStore((s) => s.symbol)
   useEffect(() => {
     if (ready) void useLearningStore.getState().load(symbol)
   }, [ready, symbol])
 
-  // tek gestür bağlamı: yatay swipe → tab geçişi, üstteyken aşağı çek → pull-to-refresh
+  // T-P0-6: Kaydırmada Header gizle / göster
+  const handleScroll = useCallback(() => {
+    const el = mainRef.current
+    if (!el) return
+    const currentScrollTop = el.scrollTop
+    if (currentScrollTop <= 15) {
+      setHeaderVisible(true)
+    } else if (currentScrollTop > lastScrollTopRef.current + 10 && currentScrollTop > 40) {
+      // Aşağı kaydırılıyor
+      setHeaderVisible(false)
+    } else if (currentScrollTop < lastScrollTopRef.current - 10) {
+      // Yukarı kaydırılıyor
+      setHeaderVisible(true)
+    }
+    lastScrollTopRef.current = currentScrollTop
+  }, [])
+
+  // T-P3-1: Tek jest bağlamı — grafikle ve yatay kaydırılabilir şeritlerle çakışma engellenir
   const bindGestures = useDrag(
     ({ offset: [dx, y], last }) => {
       const el = mainRef.current
@@ -86,16 +108,24 @@ export function App() {
     },
     {
       pointer: { touch: true },
-      filter: (e: Event) => !(e.target as HTMLElement | null)?.closest?.('[data-chart-root]'),
+      filter: (e: Event) =>
+        !(e.target as HTMLElement | null)?.closest?.(
+          '[data-chart-root], [data-no-swipe], .overflow-x-auto, [role="tablist"]',
+        ),
     },
   )
 
+  const navigateToWalls = () => {
+    setTab('duvarlar')
+    haptic(10)
+  }
+
   return (
     <div
-      className="mx-auto flex min-h-dvh max-w-md flex-col bg-bg text-text sm:max-w-lg"
+      className="mx-auto flex h-dvh max-w-md flex-col bg-bg text-text sm:max-w-lg"
       {...bindGestures}
     >
-      <Header onRetry={retry} />
+      <Header onRetry={retry} visible={headerVisible} />
 
       {pull > 0 && (
         <div className="flex justify-center text-muted" style={{ height: pull / 3 }} aria-hidden>
@@ -103,61 +133,61 @@ export function App() {
         </div>
       )}
 
-      <main ref={mainRef} className="flex-1 overflow-y-auto px-3 pb-24 pt-2">
+      <main
+        ref={mainRef}
+        onScroll={handleScroll}
+        className="flex flex-1 flex-col overflow-y-auto px-3 landscape:px-2 pb-20 landscape:pb-12 pt-1.5 landscape:pt-0.5"
+      >
         {refreshing && (
           <div className="flex justify-center py-1" role="status" aria-label="Yenileniyor">
             <RefreshCw className="size-4 animate-spin text-mint" />
           </div>
         )}
         {ready && (
-          <div className="mb-2 empty:hidden">
+          <div className="mb-1 empty:hidden">
             <ConnectionNotice onRetry={retry} />
           </div>
         )}
+
         {!ready ? (
-          <div className="flex flex-col gap-3 pt-2" aria-busy="true">
-            <Skeleton className="h-28" />
-            <Skeleton className="h-64" />
-            <Skeleton className="h-28" />
+          <div className="flex flex-1 flex-col gap-3 pt-2" aria-busy="true">
+            <Skeleton className="h-6 w-full" />
+            <Skeleton className="flex-1 min-h-[260px] w-full" />
+            <Skeleton className="h-10 w-full" />
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            <section
-              id="panel-grafik"
-              aria-label="Grafik"
-              className={tab === 'grafik' ? '' : 'hidden'}
-            >
-              <div className="flex flex-col gap-3">
+          <div className="flex flex-1 flex-col min-h-0">
+            {/* T-P1-2: Sadece aktif olan paneli render / mount et */}
+            {tab === 'grafik' && (
+              <section
+                id="panel-grafik"
+                aria-label="Grafik"
+                className="flex flex-1 flex-col min-h-0 gap-2"
+              >
+                {/* T-P0-3: Tek satırlık stat şeridi (≤ 28px) */}
                 <MetricsRow />
-                <div className="rounded-2xl border border-line bg-surface p-2">
-                  <Suspense fallback={<Skeleton className="h-[340px]" />}>
-                    <CandleChart onRetry={retry} />
-                  </Suspense>
-                </div>
+
+                {/* T-P0-4: Dinamik Grafik Alanı */}
+                <Suspense fallback={<Skeleton className="flex-1 min-h-[260px] w-full rounded-2xl" />}>
+                  <CandleChart onRetry={retry} onNavigateToWalls={navigateToWalls} />
+                </Suspense>
+
+                {/* T-P0-5: Tek satırlık tahmin şeridi */}
                 <PredictionCard />
-              </div>
-            </section>
-            <section
-              id="panel-duvarlar"
-              aria-label="Duvarlar"
-              className={tab === 'duvarlar' ? '' : 'hidden'}
-            >
-              <OrderbookPanel />
-            </section>
-            <section
-              id="panel-kovalar"
-              aria-label="Kovalar"
-              className={tab === 'kovalar' ? '' : 'hidden'}
-            >
-              <PyramidPanel />
-            </section>
-            <section
-              id="panel-hafiza"
-              aria-label="Hafıza"
-              className={tab === 'hafiza' ? '' : 'hidden'}
-            >
-              <LearningPanel />
-            </section>
+              </section>
+            )}
+
+            {tab === 'duvarlar' && (
+              <section id="panel-duvarlar" aria-label="Duvarlar" className="flex flex-col gap-3">
+                <OrderbookPanel />
+              </section>
+            )}
+
+            {tab === 'model' && (
+              <section id="panel-model" aria-label="Model" className="flex flex-col gap-3">
+                <ModelPanel />
+              </section>
+            )}
           </div>
         )}
       </main>

@@ -19,6 +19,8 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+export PATH="$PWD/node_modules/.bin:$PATH"
+
 REMOTE="${REMOTE:-origin}"
 PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
 
