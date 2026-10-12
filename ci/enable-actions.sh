@@ -19,35 +19,40 @@ echo "→ dal: $BRANCH"
 
 mkdir -p .github/workflows
 
-changed=0
-for file in ci/ci.yml ci/market-watch.yml; do
+copied=0
+for file in ci/*.yml; do
   if [ ! -f "$file" ]; then
-    echo "!! kaynak bulunamadı: $file" >&2
+    echo "!! iş akışı bulunamadı: $file" >&2
     exit 1
   fi
   target=".github/workflows/$(basename "$file")"
-  mkdir -p "$(dirname "$target")"
   cp "$file" "$target"
   echo "→ kopyalandı: $file → $target"
+  copied=$((copied + 1))
 done
+
+if [ "$copied" -eq 0 ]; then
+  echo "!! ci/ altında hiç .yml bulunamadı" >&2
+  exit 1
+fi
 
 git add .github/workflows
 
 if git diff --cached --quiet; then
   echo "→ Değişiklik yok: iş akışları zaten güncel."
-else
-  changed=1
-  git commit -m "ci: GitHub Actions iş akışlarını devreye al (CI + piyasa nöbeti)"
-  echo "→ commit oluşturuldu"
-fi
-
-if [ "$changed" = "0" ]; then
   exit 0
 fi
 
+git commit -m "ci: GitHub Actions iş akışlarını devreye al (CI + piyasa nöbeti + Pages)"
+echo "→ commit oluşturuldu"
+
 echo
 echo "Şimdi push edin:  git push origin $BRANCH"
-echo "Sonra: GitHub → Actions sekmesi → 'CI' ve 'Piyasa Nöbeti (gerçek veri)' görünür."
+echo "Sonra: GitHub → Actions sekmesinde 'CI' ve 'Piyasa Nöbeti (gerçek veri)' görünür."
+echo
+echo "Pages yayını için ayrıca: Settings → Pages → Source."
+echo "  · 'GitHub Actions'  → ci/deploy-pages.yml otomatik yayınlar"
+echo "  · 'Deploy from a branch' → gh-pages / (root)  (bkz. scripts/deploy-pages.sh)"
 echo
 echo "Alternatif (push izni sorun çıkarırsa): GitHub arayüzünde"
-echo "  Actions → New workflow → 'set up a workflow yourself' → ci/ci.yml içeriğini yapıştırın."
+echo "  Actions → New workflow → 'set up a workflow yourself' → dosya içeriğini yapıştırın."

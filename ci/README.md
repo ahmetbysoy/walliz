@@ -46,6 +46,19 @@ Gerçek veriyle **sürekli doğrulama**; burada "iş yükü Actions'ta" gerçekt
 > Not: `api.binance.com` ABD koşucularından 451 dönebilir; `data-api.binance.vision`
 > (herkese açık piyasa verisi CDN'i) genelde erişilebilir. İş akışı ikisini de dener.
 
+### `deploy-pages.yml` — GitHub Pages'e yayın
+
+- `main`'e push'ta (ve elle) çalışır: kalite kapıları → `VITE_BASE_PATH=/<repo>/` ile build →
+  `.nojekyll` → `actions/upload-pages-artifact` → `actions/deploy-pages`.
+- Gerekli ayar: **Settings → Pages → Source: GitHub Actions**.
+- İzin gerektirmeyen alternatif: `bash scripts/deploy-pages.sh` (dist'i `gh-pages` dalına
+  push eder; Settings → Pages → Source: Deploy from a branch → `gh-pages` / root).
+
+> Sayfa alt dizinden servis edildiği için taban yol (**base path**) şart. `vite.config.ts`
+> `VITE_BASE_PATH` ile bunu destekler; PWA manifest `start_url`/`scope` ve service worker
+> `navigateFallback` de aynı tabana göre üretilir. Kök alan adına (Vercel, custom domain)
+> kurulacaksa `VITE_BASE_PATH=/` yeterlidir.
+
 ## Codespaces
 
 `.devcontainer/devcontainer.json` hazır: Node 22, GitHub CLI, ESLint/Prettier/Tailwind/

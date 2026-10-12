@@ -92,6 +92,15 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 - [x] T907 Editör ayarları: `.vscode/settings.json`, `.vscode/extensions.json`
 - [x] T908 `npm run test:live` (canlı borsa sözleşme testi) + backtest çekirdeği için birim testleri
 
+## Faz 9b — GitHub Pages yayını (bu oturum)
+
+- [x] T910 Taban yol desteği: `vite.config.ts` `VITE_BASE_PATH` → `base`, PWA `start_url`/`scope`,
+      SW `navigateFallback`, `index.html` `%BASE_URL%` referansları
+- [x] T911 `scripts/deploy-pages.sh`: dist'i `gh-pages` dalına tek commit olarak force-push (izin gerektirmez)
+- [x] T912 `ci/deploy-pages.yml`: Actions ile otomatik Pages yayını (kalite kapıları + artifact + deploy)
+- [x] T913 Alt-dizin doğrulaması: `/walliz/` altında tüm varlıkların (js/css/sw/manifest/ikon) 200 döndüğü yerelde kanıtlandı
+- [ ] T914 Pages'in açılması: Settings → Pages → Source (repo sahibi; API izni App'te yok — 403)
+
 ## Faz 7 — Yayın
 
 - [x] T701 CI (GitHub Actions): lint + test + build + e2e

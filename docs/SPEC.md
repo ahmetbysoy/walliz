@@ -222,7 +222,12 @@ Matematik detayı: `docs/MODEL.md`. Özet:
   `.github/workflows` altına alınması için `ci/enable-actions.sh` (bkz. `ci/README.md`).
 - **Codespaces/Dev Container:** `.devcontainer/devcontainer.json` — Node 22, port yönlendirme
   (5173/4173), `npm ci`; elle QA/Lighthouse/E2E için tek tıkla ortam.
-- **Deploy:** statik build → Vercel/Netlify (server gerekmez; WS tarayıcıdan bağlanır).
+- **Deploy:** statik build (server gerekmez; WS tarayıcıdan bağlanır).
+  · **GitHub Pages:** `bash scripts/deploy-pages.sh` (gh-pages dalı) veya `ci/deploy-pages.yml`
+  (Actions). Proje siteleri `/<repo>/` altından servis edildiği için build
+  `VITE_BASE_PATH=/<repo>/` ile alınır; PWA `start_url`/`scope` ve SW `navigateFallback`
+  aynı tabana göre üretilir.
+  · **Vercel/Netlify:** kök alan adı → `VITE_BASE_PATH` verilmez (varsayılan `/`).
 - **Env:** `VITE_BINANCE_WS`, `VITE_BINANCE_WS_FALLBACKS`, `VITE_BINANCE_REST`,
   `VITE_BINANCE_REST_FALLBACKS` (örnek: `.env.example`).
 - **PWA:** manifest (192/512 + maskable), `display: standalone`, tema rengi; çevrimdışıyken

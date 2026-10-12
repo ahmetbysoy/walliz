@@ -1,0 +1,78 @@
+name: Pages'e Yayınla
+
+# GitHub Pages'e otomatik yayın (Actions ile).
+#
+# Bu yolu kullanmak için iki şey gerekir:
+#   1. Bu dosya `.github/workflows/deploy-pages.yml` olarak repoya girmeli
+#      (`bash ci/enable-actions.sh` bunu da kopyalar) — oturumdaki GitHub App'in
+#      `workflows` izni olmadığı için `ci/` altında duruyor.
+#   2. Kullanıcı: Settings → Pages → Source: "GitHub Actions".
+#
+# Alternatif (izin gerektirmeyen yol): `bash scripts/deploy-pages.sh`
+# → dist'i `gh-pages` dalına push eder; Settings → Pages → Source: "Deploy from a branch".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  build:
+    name: Build (Pages taban yolu ile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      # Proje siteleri /<repo>/ altından servis edilir: taban yol zorunlu
+      - name: Kalite kapıları (lint · format · test · tip kontrolü)
+        run: |
+          npm run lint
+          npm run format:check
+          npm run test:coverage
+
+      - name: Pages taban yolu ile build
+        env:
+          VITE_BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: .nojekyll ekle
+        run: touch dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Yayına al
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

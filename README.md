@@ -110,7 +110,25 @@ Playwright eklentilerini kurar, 5173/4173 portlarını yönlendirir ve uygulamay
 
 ## Yayın
 
-Statik build (Vercel/Netlify) — Actions'tan bağımsız çalışır.
+Statik build — iki yol var, ikisi birbirinden bağımsız:
+
+**1. GitHub Pages (repodan yayın)**
+
+```bash
+bash scripts/deploy-pages.sh          # dist'i gh-pages dalına push eder
+```
+
+- Build `VITE_BASE_PATH=/<repo>/` ile alınır (Pages proje siteleri alt dizinden servis edilir;
+  taban yol olmadan varlıklar 404 olur). Taban yolu elle vermek için:
+  `PAGES_BASE_PATH=/ bas` → kök alan adı/custom domain için `PAGES_BASE_PATH=/`.
+- Yayın adresi: `https://<kullanıcı>.github.io/<repo>/`
+- Tek seferlik kurulum: **Settings → Pages → Source: Deploy from a branch → `gh-pages` / (root)**.
+  Otomatik olması için Actions yolu: `ci/deploy-pages.yml` (bkz. `ci/README.md`) +
+  Settings → Pages → Source: **GitHub Actions**.
+
+**2. Vercel/Netlify (kök alan adı)**
+Kök alan adından servis edildiği için `VITE_BASE_PATH` verilmez (varsayılan `/`).
+Vercel `main`'e giren her commit'i production'a alır; branşlar önizleme olur.
 
 ## Bilinçli Ertelenenler
 

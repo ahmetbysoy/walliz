@@ -5,6 +5,16 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
 
+/**
+ * Taban yol (base path).
+ *
+ * Varsayılan `/` — kök alan adından servis edilen ortamlar (Vercel, Netlify, yerel
+ * geliştirme). GitHub Pages proje siteleri `https://<kullanıcı>.github.io/<repo>/`
+ * altından servis edilir; bu durumda `VITE_BASE_PATH=/<repo>/` verilir ve hem varlık
+ * yolları hem PWA manifest `start_url`/`scope` bu tabana göre üretilir.
+ */
+const base = process.env.VITE_BASE_PATH || '/'
+
 const pwa = VitePWA({
   registerType: 'autoUpdate',
   includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable.png'],
@@ -17,8 +27,8 @@ const pwa = VitePWA({
     theme_color: '#0b0f14',
     background_color: '#0b0f14',
     display: 'standalone',
-    start_url: '/',
-    scope: '/',
+    start_url: base,
+    scope: base,
     icons: [
       { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -27,7 +37,7 @@ const pwa = VitePWA({
   },
   workbox: {
     globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-    navigateFallback: '/index.html',
+    navigateFallback: `${base}index.html`,
     navigateFallbackDenylist: [/^\/api\//],
     runtimeCaching: [
       {
@@ -45,6 +55,7 @@ const pwa = VitePWA({
 const analyze = process.env.ANALYZE === '1'
 
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
