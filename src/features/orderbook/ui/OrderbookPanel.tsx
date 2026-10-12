@@ -18,10 +18,18 @@ export function OrderbookPanel() {
   const [detail, setDetail] = useState<{ level: BookLevel; side: WallSide } | null>(null)
 
   const wallByPrice = useMemo(() => new Map(walls.map((w) => [`${w.side}:${w.price}`, w])), [walls])
-  const maxTotal = useMemo(
-    () => (book ? Math.max(book.bids[0]?.total ?? 0, book.asks[0]?.total ?? 0) : 0),
-    [book],
-  )
+  /**
+   * Derinlik çubuklarının oranlanacağı tepe değer: her taraftaki **kümülatif toplamın
+   * en büyüğü** (listenin son seviyesi — `normalizeBookRows` kümülatifi en iyi fiyattan
+   * dışa doğru biriktirir). İlk seviyelerin toplamı en küçük olduğu için onları baz almak
+   * bütün çubukları tavana yapıştırırdı.
+   */
+  const maxTotal = useMemo(() => {
+    if (!book) return 0
+    const bidDepth = book.bids[book.bids.length - 1]?.total ?? 0
+    const askDepth = book.asks[book.asks.length - 1]?.total ?? 0
+    return Math.max(bidDepth, askDepth)
+  }, [book])
 
   if (!book || book.bids.length === 0 || book.asks.length === 0) {
     return (
@@ -47,7 +55,7 @@ export function OrderbookPanel() {
       <Card className="flex items-center justify-between px-4 py-3 text-xs tabular-nums">
         <span className="text-muted">Spread</span>
         <span className="font-medium text-text">
-          {formatPrice(spread, coin.priceDecimals)} ({formatPct(spreadPct)})
+          {formatPrice(spread, coin.priceDecimals)} ({formatPct(spreadPct * 100)})
         </span>
       </Card>
 

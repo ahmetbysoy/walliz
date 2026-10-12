@@ -101,6 +101,30 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 - [x] T913 Alt-dizin doğrulaması: `/walliz/` altında tüm varlıkların (js/css/sw/manifest/ikon) 200 döndüğü yerelde kanıtlandı
 - [ ] T914 Pages'in açılması: Settings → Pages → Source (repo sahibi; API izni App'te yok — 403)
 
+## Faz 10 — Gerçek tel formatı denetimi (bu oturum)
+
+Kullanıcı bildirimi: "readme'deki özelliklerin çoğu çalışmıyor". Kök neden, feed'in kendi
+test double'larıyla doğrulanan **yanlış tel formatı varsayımlarıydı** (testler kendi
+varsayımını doğruladığı için yeşil kalıyordu). Resmî dokümanla karşılaştırıldı
+(`binance/binance-spot-api-docs`):
+
+- [x] T1001 **Kısmi derinlik yükü**: `{ lastUpdateId, bids, asks }` — şema `e: 'depth20'`
+      istiyordu, gerçek yükte `e` YOK → sipariş kitabı hiç dolmuyordu. Mesaj tipi artık
+      yükün şeklinden tanınır (`isDepthSnapshot`); güncelleme kimliği `lastUpdateId`.
+      Etkisi: orderbook paneli, spread, duvar tespiti, `imbalance`/`wallPressure`
+      ve (kitap şartı nedeniyle) tahmin/kovalar/hafıza tamamen ölüydü.
+- [x] T1002 **Ticker yükü**: 24s yüksek/düşük küçük harf `h`/`l`; şema `H`/`L` istiyordu
+      (büyük `L` gerçekte "son işlem kimliği") → her ticker mesajı düşüyordu; fiyat/24s
+      değişim/hacim hiç gelmiyordu.
+- [x] T1003 Sözleşme testi: `tests/integration/binanceWireContract.test.ts` — resmî
+      dokümandan birebir yüklerle üç akış (derinlik/kline/ticker) + büyük harf `L` tuzağı.
+- [x] T1004 Orderbook derinlik çubukları: ölçek en iyi seviyenin kümülatifi yerine
+      taraftaki **en derin** kümülatif toplamdan alınıyor (çubuklar tavana yapışmıyordu).
+- [x] T1005 Spread yüzdesi oran yerine yüzde olarak biçimleniyor (`+0.01%`), `—` durumu
+      renkli "düşüş" olarak gösterilmiyor.
+- [x] T1006 Radix `Select`: ipucu `ItemText` dışına alındı (tetikleyicide "BTC Bitcoin"
+      taşması), `ConfidenceBar` aria etiketi gerçek yüzdeyi taşıyor.
+
 ## Faz 7 — Yayın
 
 - [x] T701 CI (GitHub Actions): lint + test + build + e2e

@@ -106,7 +106,17 @@ type FeedEvent =
 
 - Tek bağlantı: `depth20@100ms + kline_<tf> + ticker` (combined stream URL).
 - Mesajlar zod ile doğrulanır (`depth20Schema`, `klineSchema`, `tickerSchema`);
-  geçersiz → `console.warn` + atla (akış düşmez). Eski `depth20` snapshot'ı (geriye düşen `u`) atılır.
+  geçersiz → `console.warn` + atla (akış düşmez). Eski derinlik snapshot'ı (geriye düşen
+  `lastUpdateId`) atılır.
+- **Tel formatı sözleşmesi (borsanın gerçek yükü — `tests/integration/binanceWireContract.test.ts`):**
+  · Kısmi derinlik (`<sym>@depth20@100ms`): `{ lastUpdateId, bids, asks }` — bu akışta
+  **`e` (event type) alanı yoktur**; mesaj tipi `bids`+`asks` dizilerinin varlığından anlaşılır.
+  (`e:"depthUpdate"` + `u`/`b`/`a` biçimi fark depth akışına aittir.)
+  · Kline (`<sym>@kline_<tf>`): `{ e:"kline", k:{ t,o,h,l,c,v,x } }`.
+  · Ticker (`<sym>@ticker`): `{ e:"24hrTicker", c, P, h, l, v }` — 24s yüksek/düşük **küçük
+  harf** `h`/`l` alanlarındadır; yükteki büyük harf `L` "son işlem kimliği"dir (fiyat değil),
+  bu yüzden fiyat olarak okunmaz.
+  · REST `/api/v3/klines` satırı: `[openTime, o, h, l, c, v, closeTime, …]`.
 - **Exponential backoff:** 1s → 2s → 4s → 8s → … max 30s, ±%20 jitter ile.
 - **Host rotasyonu:** birincil WS/REST host'a erişilemezse gerçek yedek host'lar denenir.
 - **Heartbeat:** 30 sn mesaj gelmezse soket ölü kabul edilir → yeniden bağlan.

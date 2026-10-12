@@ -29,7 +29,10 @@ import { depth20Schema, klineSchema, tickerSchema, toNumber } from './schemas'
  * - Heartbeat watchdog: 30 sn mesaj gelmezse soket ölü kabul edilip yeniden bağlanılır.
  * - Sıralama garantisi: geçmiş mumlar zamana göre sıralanır, tekilleştirilir; kapanmışlık
  *   bilgisi Binance'in `kline.closeTime` alanından (gerçek zaman) türetilir.
- * - Derinlik tekilliği: geriye düşen `lastUpdateId` (eski snapshot) atılır.
+ * - Derinlik tekilliği: geriye düşen güncelleme kimliği (`lastUpdateId`) olan eski
+ *   snapshot atılır.
+ * - Kısmi derinlik yükü `{lastUpdateId, bids, asks}` biçimindedir ve `e` alanı yoktur;
+ *   mesaj tipi yükün şeklinden anlaşılır (isDepthSnapshot).
  * - Görünürlük: sekme gizlenince soket kapatılır (pil), görününce yeniden bağlanılır.
  */
 
@@ -56,6 +59,19 @@ export interface LiveFeed {
   on(handler: (e: FeedEvent) => void): () => void
   /** Teşhis amaçlı: mevcut host ve deneme sayısı */
   diagnostics(): { wsHost: string; restHost: string; attempt: number; connected: boolean }
+}
+
+/**
+ * Yükün kısmi derinlik (orderbook snapshot'ı) olup olmadığını ŞEKLİNDEN anlar.
+ *
+ * Spot kısmi derinlik akışının (`<symbol>@depth20@100ms`) yükünde `e` (event type)
+ * alanı yoktur: `{ "lastUpdateId": 160, "bids": [...], "asks": [...] }`
+ * (bkz. binance-spot-api-docs → "Partial Book Depth Streams"). Bu yüzden mesaj,
+ * olay adına bakılarak değil yükün kendisinden tanınır — `kline`/`24hrTicker`
+ * yüklerinde `bids`/`asks` dizileri bulunmaz.
+ */
+function isDepthSnapshot(d: Record<string, unknown>): boolean {
+  return Array.isArray(d.bids) && Array.isArray(d.asks)
 }
 
 export function createLiveFeed(opts: LiveFeedOptions): LiveFeed {
@@ -288,14 +304,14 @@ export function createLiveFeed(opts: LiveFeedOptions): LiveFeed {
     if (!data || typeof data !== 'object') return
     const d = data as Record<string, unknown>
 
-    if (d.e === 'depth20') {
+    if (isDepthSnapshot(d)) {
       const parsed = depth20Schema.safeParse(data)
       if (!parsed.success) {
-        warn('geçersiz depth20 mesajı atlandı')
+        warn('geçersiz kısmi derinlik mesajı atlandı')
         return
       }
-      // eski snapshot (geriye düşen update id) kitabı bozar → atla
-      const updateId = parsed.data.u
+      // eski snapshot (geriye düşen güncelleme kimliği) kitabı bozar → atla
+      const updateId = parsed.data.lastUpdateId ?? parsed.data.u ?? parsed.data.U
       if (
         typeof updateId === 'number' &&
         lastBookUpdateId !== null &&
@@ -305,8 +321,8 @@ export function createLiveFeed(opts: LiveFeedOptions): LiveFeed {
       }
       if (typeof updateId === 'number') lastBookUpdateId = updateId
       const book = buildBookSnapshot(
-        parsed.data.bids.map(([p, q]) => [String(p), String(q)] as [string, string]),
-        parsed.data.asks.map(([p, q]) => [String(p), String(q)] as [string, string]),
+        parsed.data.bids.map((row) => [String(row[0]), String(row[1])] as [string, string]),
+        parsed.data.asks.map((row) => [String(row[0]), String(row[1])] as [string, string]),
         now(),
         updateId,
       )
@@ -338,19 +354,22 @@ export function createLiveFeed(opts: LiveFeedOptions): LiveFeed {
         warn('geçersiz ticker mesajı atlandı')
         return
       }
-      const ticker = {
-        last: toNumber(parsed.data.c),
-        changePct: toNumber(parsed.data.P),
-        volume24h: toNumber(parsed.data.v),
-        high24h: toNumber(parsed.data.H),
-        low24h: toNumber(parsed.data.L),
-        ts: now(),
-      }
-      if (!Number.isFinite(ticker.last) || ticker.last <= 0) {
-        warn('ticker son fiyatı geçersiz — atlandı')
+      // 24s yüksek/düşük fiyatlar telde KÜÇÜK harf `h`/`l` alanlarındadır;
+      // büyük harf `L` yükteki "son işlem kimliği"dir ve fiyat değildir.
+      const last = toNumber(parsed.data.c)
+      const changePct = toNumber(parsed.data.P)
+      const volume24h = toNumber(parsed.data.v)
+      const high24h = toNumber(parsed.data.h)
+      const low24h = toNumber(parsed.data.l)
+      if (
+        !Number.isFinite(last) ||
+        last <= 0 ||
+        ![changePct, volume24h, high24h, low24h].every((n) => Number.isFinite(n))
+      ) {
+        warn('ticker değerleri geçersiz — atlandı')
         return
       }
-      emit({ type: 'ticker', ticker })
+      emit({ type: 'ticker', ticker: { last, changePct, volume24h, high24h, low24h, ts: now() } })
     }
   }
 

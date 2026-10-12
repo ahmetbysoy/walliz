@@ -6,8 +6,12 @@ import { ConnectionNotice } from '@/app/shell/ConnectionNotice'
 import { StatusPill } from '@/features/market-feed/ui/StatusPill'
 import { useMarketStore } from '@/shared/model/marketStore'
 import { OrderbookRow } from '@/features/orderbook/ui/OrderbookRow'
+import { OrderbookPanel } from '@/features/orderbook/ui/OrderbookPanel'
+import { CoinSelect } from '@/features/preferences/ui/CoinSelect'
 import { MetricCard } from '@/shared/ui/MetricCard'
 import { EmptyState } from '@/shared/ui/EmptyState'
+import { ConfidenceBar } from '@/shared/ui/ConfidenceBar'
+import { buildBookSnapshot } from '@/shared/lib/book'
 import { CandlestickChart } from 'lucide-react'
 
 describe('StatusPill', () => {
@@ -132,5 +136,73 @@ describe('EmptyState', () => {
     )
     expect(screen.getByRole('status')).toHaveTextContent('Bekleniyor')
     expect(screen.getByText('Veri gelene kadar buradayız')).toBeInTheDocument()
+  })
+})
+
+describe('OrderbookPanel — gerçek kitap görünümü', () => {
+  beforeEach(() => {
+    useMarketStore.setState({
+      symbol: 'BTCUSDT',
+      book: buildBookSnapshot(
+        [
+          ['67000', '1'],
+          ['66999', '2'],
+          ['66998', '3'],
+        ],
+        [
+          ['67010', '1'],
+          ['67011', '1'],
+          ['67012', '8'],
+        ],
+        1_700_000_000_000,
+        42,
+      ),
+      walls: [],
+    })
+  })
+
+  /** Bir fiyat satırındaki derinlik çubuğunun genişliği */
+  function barWidthFor(priceText: string): string {
+    const priceEl = screen.getByText(priceText)
+    const row = priceEl.parentElement as HTMLElement
+    const bar = row.querySelector('span[aria-hidden="true"]') as HTMLElement | null
+    return bar?.style.width ?? ''
+  }
+
+  it('spread yüzdesi oran olarak değil yüzde olarak biçimlenir', () => {
+    render(<OrderbookPanel />)
+    // 67010 / 67000 - 1 = %0.0149 → iki hane: %0.01 (eskiden oran verilip %0.00 görünüyordu)
+    expect(screen.getByText(/\+0\.01%/)).toBeInTheDocument()
+    expect(screen.getByText('10.00 (+0.01%)')).toBeInTheDocument()
+  })
+
+  it('derinlik çubukları en derin kümülatif toplama göre oranlanır', () => {
+    render(<OrderbookPanel />)
+    // bids kümülatif: 67000→1, 66999→3, 66998→6 · asks: 67010→1, 67011→2, 67012→10
+    expect(barWidthFor('67,012.00')).toBe('100%')
+    expect(barWidthFor('66,998.00')).toBe('60%')
+    expect(barWidthFor('67,000.00')).toBe('10%')
+    // en iyi seviyeler tavana yapışmamalı
+    expect(barWidthFor('67,000.00')).not.toBe('100%')
+  })
+
+  it('kitap yokken uydurma seviye göstermez', () => {
+    useMarketStore.setState({ book: null })
+    render(<OrderbookPanel />)
+    expect(screen.getByRole('status')).toHaveTextContent('Orderbook bekleniyor')
+  })
+})
+
+describe('ConfidenceBar / CoinSelect', () => {
+  it('güven çubuğu erişilebilir etikette gerçek yüzdeyi taşır', () => {
+    render(<ConfidenceBar value={0.73} />)
+    expect(screen.getByRole('progressbar', { name: 'Güven %73' })).toBeInTheDocument()
+  })
+
+  it('coin tetikleyicisi yalnızca kısa kodu gösterir (ipucu listede kalır)', () => {
+    render(<CoinSelect value="BTCUSDT" onChange={() => {}} />)
+    const trigger = screen.getByRole('combobox', { name: 'Coin seç' })
+    expect(trigger).toHaveTextContent('BTC')
+    expect(trigger).not.toHaveTextContent('Bitcoin')
   })
 })

@@ -131,8 +131,8 @@ describe('App — gerçek feed mesajları arayüze ulaşır', () => {
       e: '24hrTicker',
       c: '67432.10',
       P: '1.50',
-      H: '68000',
-      L: '66000',
+      h: '68000',
+      l: '66000',
       v: '12345.6',
     })
     await waitFor(() => expect(screen.getAllByText('67,432.10').length).toBeGreaterThan(0))
@@ -140,11 +140,10 @@ describe('App — gerçek feed mesajları arayüze ulaşır', () => {
     expect(screen.getAllByText('Bitcoin').length).toBeGreaterThan(0)
   })
 
-  it('depth20 → duvarlar paneli gerçek kitap seviyelerini listeler', async () => {
+  it('kısmi derinlik → duvarlar paneli gerçek kitap seviyelerini listeler', async () => {
     const ws = await mountApp()
     ws.emit({
-      e: 'depth20',
-      u: 5,
+      lastUpdateId: 5,
       bids: [
         ['67000.00', '1.5'],
         ['66990.00', '2'],
@@ -166,7 +165,7 @@ describe('App — gerçek feed mesajları arayüze ulaşır', () => {
     expect(screen.queryByText('Model Tahmini')).toBeNull()
 
     // 2) derinlik gelir → bekleyen kapalı mum için tahmin üretilir
-    ws.emit({ e: 'depth20', u: 5, bids: [['67000', '3']], asks: [['67010', '3']] })
+    ws.emit({ lastUpdateId: 5, bids: [['67000', '3']], asks: [['67010', '3']] })
     await waitFor(() => expect(screen.getByText('Model Tahmini')).toBeInTheDocument(), {
       timeout: 5000,
     })
@@ -175,7 +174,7 @@ describe('App — gerçek feed mesajları arayüze ulaşır', () => {
 
   it('kapalı mum + kitap hazırken tahmin tek seferlik üretilir (kitap akışı tekrarlatmaz)', async () => {
     const ws = await mountApp()
-    ws.emit({ e: 'depth20', u: 5, bids: [['67000', '3']], asks: [['67010', '3']] })
+    ws.emit({ lastUpdateId: 5, bids: [['67000', '3']], asks: [['67010', '3']] })
     await waitFor(() => expect(useMarketStore.getState().book).not.toBeNull())
     emitClosedCandle(ws)
     await waitFor(() => expect(screen.getByText('Model Tahmini')).toBeInTheDocument(), {
@@ -185,8 +184,8 @@ describe('App — gerçek feed mesajları arayüze ulaşır', () => {
     expect(first).toBeTruthy()
 
     // 100 ms'de bir gelen derinlik güncellemeleri yeni tahmin üretmemeli
-    ws.emit({ e: 'depth20', u: 6, bids: [['67001', '4']], asks: [['67011', '4']] })
-    ws.emit({ e: 'depth20', u: 7, bids: [['67002', '4']], asks: [['67012', '4']] })
+    ws.emit({ lastUpdateId: 6, bids: [['67001', '4']], asks: [['67011', '4']] })
+    ws.emit({ lastUpdateId: 7, bids: [['67002', '4']], asks: [['67012', '4']] })
     await new Promise((r) => setTimeout(r, 200))
     expect(useLearningStore.getState().state.pending?.id).toBe(first)
     expect(useLearningStore.getState().state.stats.total).toBe(0)

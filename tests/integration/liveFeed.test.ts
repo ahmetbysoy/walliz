@@ -219,15 +219,15 @@ describe('live feed — bağlantı ve gerçek veri akışı', () => {
     expect(events.filter((e) => e.type === 'history')).toHaveLength(1)
   })
 
-  it('depth20 → normalize kitap; geriye düşen update id atılır', async () => {
+  it('kısmi derinlik (lastUpdateId) → normalize kitap; geriye düşen kimlik atılır', async () => {
     const { feed, events } = makeFeed()
     stubFetch({})
     feed.start()
     MockWebSocket.last().simulateOpen()
     const ws = MockWebSocket.last()
     ws.simulateMessage({
-      e: 'depth20',
-      u: 100,
+      // gerçek tel formatı: { lastUpdateId, bids, asks } — `e` alanı YOK
+      lastUpdateId: 100,
       bids: [
         ['67000', '1'],
         ['66999', '2'],
@@ -235,8 +235,7 @@ describe('live feed — bağlantı ve gerçek veri akışı', () => {
       asks: [['67001', '3']],
     })
     ws.simulateMessage({
-      e: 'depth20',
-      u: 99, // eski snapshot → yok sayılır
+      lastUpdateId: 99, // eski snapshot → yok sayılır
       bids: [['60000', '9']],
       asks: [['70000', '9']],
     })
@@ -250,7 +249,7 @@ describe('live feed — bağlantı ve gerçek veri akışı', () => {
     }
   })
 
-  it('kline → mum (kapanmışlık `k.x` ile), ticker → 24s özeti', () => {
+  it('kline → mum (kapanmışlık `k.x` ile), ticker → 24s özeti (küçük harf h/l)', () => {
     const { feed, events } = makeFeed()
     stubFetch({})
     feed.start()
@@ -264,7 +263,7 @@ describe('live feed — bağlantı ve gerçek veri akışı', () => {
       e: 'kline',
       k: { t: T0, o: '100', h: '101', l: '99', c: '100.6', v: '12', x: true },
     })
-    ws.simulateMessage({ e: '24hrTicker', c: '100.6', P: '1.5', H: '102', L: '98', v: '999' })
+    ws.simulateMessage({ e: '24hrTicker', c: '100.6', P: '1.5', h: '102', l: '98', v: '999' })
     const candles = events.filter((e) => e.type === 'candle')
     expect(candles).toHaveLength(2)
     if (candles[0].type === 'candle' && candles[1].type === 'candle') {
@@ -284,19 +283,70 @@ describe('live feed — bağlantı ve gerçek veri akışı', () => {
     MockWebSocket.last().simulateOpen()
     const ws = MockWebSocket.last()
     ws.simulateRaw('bu json değil')
-    ws.simulateMessage({ e: 'depth20', bids: [], asks: [['1', '2']] })
+    ws.simulateMessage({ lastUpdateId: 1, bids: [], asks: [['1', '2']] })
     ws.simulateMessage({ e: 'kline', k: { t: T0 } })
-    ws.simulateMessage({ e: '24hrTicker', c: '0', P: '0', H: '0', L: '0', v: '0' })
+    ws.simulateMessage({ e: '24hrTicker', c: '0', P: '0', h: '0', l: '0', v: '0' })
     expect(events.filter((e) => e.type === 'book')).toHaveLength(0)
     expect(events.filter((e) => e.type === 'candle')).toHaveLength(0)
     expect(events.filter((e) => e.type === 'ticker')).toHaveLength(0)
     ws.simulateMessage({
-      e: 'depth20',
-      u: 1,
+      lastUpdateId: 1,
       bids: [['10', '1']],
       asks: [['11', '1']],
     })
     expect(events.filter((e) => e.type === 'book')).toHaveLength(1)
+  })
+
+  it('resmî doküman örneği: `e` alanı olmayan kısmi derinlik yükü kitabı doldurur', async () => {
+    const { feed, events } = makeFeed()
+    stubFetch({})
+    feed.start()
+    MockWebSocket.last().simulateOpen()
+    const ws = MockWebSocket.last()
+
+    // binance-spot-api-docs → "Partial Book Depth Streams" yükünün birebir kopyası
+    ws.simulateMessage({
+      lastUpdateId: 160,
+      bids: [
+        ['0.0024', '10'],
+        ['0.0023', '5'],
+      ],
+      asks: [
+        ['0.0026', '100'],
+        ['0.0027', '20'],
+      ],
+    })
+
+    const books = events.filter((e) => e.type === 'book')
+    expect(books).toHaveLength(1)
+    if (books[0].type === 'book') {
+      expect(books[0].book.bids.map((l) => l.price)).toEqual([0.0024, 0.0023])
+      expect(books[0].book.asks.map((l) => l.price)).toEqual([0.0026, 0.0027])
+      expect(books[0].book.bids[0].qty).toBe(10)
+      expect(books[0].book.asks[0].qty).toBe(100)
+      expect(books[0].book.bids[1].total).toBe(15)
+      expect(books[0].book.lastUpdateId).toBe(160)
+    }
+  })
+
+  it("fark derinlik akışı (e: 'depthUpdate', b/a) snapshot sanılmaz", async () => {
+    const { feed, events } = makeFeed()
+    stubFetch({})
+    feed.start()
+    MockWebSocket.last().simulateOpen()
+    const ws = MockWebSocket.last()
+
+    // abone olmadığımız fark derinlik biçimi: bids/asks değil b/a taşır → kitap üretilmez
+    ws.simulateMessage({
+      e: 'depthUpdate',
+      s: 'BTCUSDT',
+      U: 157,
+      u: 160,
+      b: [['67000', '1']],
+      a: [['67001', '1']],
+    })
+
+    expect(events.filter((e) => e.type === 'book')).toHaveLength(0)
   })
 
   it('hiçbir kaynak veri vermezse: uydurma mum/fiyat/kitap ÜRETİLMEZ, yalnız durum bildirilir', async () => {
@@ -384,7 +434,7 @@ describe('live feed — kopma, yeniden deneme ve host rotasyonu', () => {
     const ws = MockWebSocket.last()
     for (let i = 0; i < 5; i++) {
       await vi.advanceTimersByTimeAsync(20_000)
-      ws.simulateMessage({ e: '24hrTicker', c: '100', P: '0', H: '1', L: '1', v: '1' })
+      ws.simulateMessage({ e: '24hrTicker', c: '100', P: '0', h: '1', l: '1', v: '1' })
     }
     expect(MockWebSocket.instances).toHaveLength(1)
   })
