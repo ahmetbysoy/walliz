@@ -8,8 +8,8 @@ import type {
   Ticker,
   Wall,
 } from '@/entities'
-
-const MAX_CANDLES = 500
+import { MAX_CANDLES } from '@/shared/config/coins'
+import { mergeHistory, sameCandleList, upsertCandle } from '@/shared/lib/candles'
 
 export interface MarketState {
   status: FeedStatus
@@ -19,13 +19,34 @@ export interface MarketState {
   price: number | null
   ticker: Ticker | null
   book: BookSnapshot | null
+  /** Zamana göre ARTAN ve tekil mum listesi (grafik + model tek kaynaktan beslenir) */
   candles: Candle[]
+  /**
+   * Pencere yapısı değiştiğinde (geçmiş mum birleşmesi / geriye dönük mum düzeltmesi /
+   * pencere kırpılması) artar. Grafik bu sayaç değiştiğinde artımlı `update()` yerine
+   * tam `setData()` yapar — gerçek feed'lerde mum tekrarı/gelgitmesi çizimi bozamaz.
+   */
+  candlesRewriteSeq: number
   walls: Wall[]
   features: FeatureVector | null
   lastEventAt: number
   apply: (e: FeedEvent) => void
   setWalls: (walls: Wall[], features: FeatureVector | null) => void
   reset: (symbol: string, timeframe: string) => void
+}
+
+/** Kapanmamış mum güncellemesi pencere yapısını değiştirmez (artımlı çizim yeterli). */
+function isStructuralChange(existing: Candle[], next: Candle[], incoming: Candle): boolean {
+  const last = next[next.length - 1]
+  if (!last) return true
+  // geriye dönük yerleştirme/tekrar → pencere yapısı değişti
+  if (incoming.time < last.time) return true
+  // pencere kırpıldı mı? (en eski mum düştüyse grafik baştan çizilmeli)
+  if (existing.length === MAX_CANDLES && next.length === MAX_CANDLES) {
+    const dropped = existing[0]
+    if (dropped && dropped.time !== next[0].time) return true
+  }
+  return false
 }
 
 /**
@@ -41,6 +62,7 @@ export const useMarketStore = create<MarketState>()((set) => ({
   ticker: null,
   book: null,
   candles: [],
+  candlesRewriteSeq: 0,
   walls: [],
   features: null,
   lastEventAt: 0,
@@ -55,25 +77,36 @@ export const useMarketStore = create<MarketState>()((set) => ({
         case 'book':
           return { book: e.book, lastEventAt: e.book.ts }
         case 'candle': {
-          const candles = st.candles.slice()
-          const last = candles[candles.length - 1]
-          if (last && last.time === e.candle.time) {
-            candles[candles.length - 1] = e.candle
-          } else {
-            candles.push(e.candle)
-            if (candles.length > MAX_CANDLES) candles.splice(0, candles.length - MAX_CANDLES)
+          const incoming = e.candle
+          if (!Number.isFinite(incoming.time) || incoming.time <= 0) return {}
+          const candles = upsertCandle(st.candles, incoming)
+          if (candles === st.candles) return {}
+          const structural = isStructuralChange(st.candles, candles, incoming)
+          return {
+            candles,
+            candlesRewriteSeq: st.candlesRewriteSeq + (structural ? 1 : 0),
+            price: incoming.close,
+            lastEventAt: Date.now(),
           }
-          return { candles, price: e.candle.close, lastEventAt: Date.now() }
         }
-        case 'history':
-          return { candles: e.candles.slice(-MAX_CANDLES) }
+        case 'history': {
+          const valid = e.candles.filter((c) => Number.isFinite(c.time) && c.time > 0)
+          if (valid.length === 0) return {}
+          const candles = mergeHistory(st.candles, valid)
+          if (sameCandleList(candles, st.candles)) return {}
+          return {
+            candles,
+            candlesRewriteSeq: st.candlesRewriteSeq + 1,
+            lastEventAt: Date.now(),
+          }
+        }
       }
     }),
 
   setWalls: (walls, features) => set({ walls, features }),
 
   reset: (symbol, timeframe) =>
-    set({
+    set((st) => ({
       symbol,
       timeframe,
       status: 'connecting',
@@ -82,10 +115,12 @@ export const useMarketStore = create<MarketState>()((set) => ({
       ticker: null,
       book: null,
       candles: [],
+      // yeni sembol/timeframe → grafik tam yeniden çizilmeli
+      candlesRewriteSeq: st.candlesRewriteSeq + 1,
       walls: [],
       features: null,
       lastEventAt: 0,
-    }),
+    })),
 }))
 
 export const getMarket = (): MarketState => useMarketStore.getState()

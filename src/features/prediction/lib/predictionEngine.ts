@@ -42,9 +42,19 @@ export interface PredictionEngineDeps {
 let counter = 0
 const nextId = (): string => `p-${Date.now().toString(36)}-${(counter++).toString(36)}`
 
+/** Tahmin için gereken en az mum sayısı (model penceresi + ATR ısınması) */
+export const MIN_CANDLES_FOR_PREDICTION = 25
+
 export function createPredictionEngine(deps: PredictionEngineDeps) {
   return {
-    handleClosedCandle(closed: Candle): void {
+    /**
+     * Kapalı mumu işler.
+     * @returns Yeni bir tahmin üretildiyse `true`. Ön koşullar eksikse (yeterli mum
+     * yok / kitap henüz gelmedi / ATR sıfır) `false` döner ve çağıran taraf aynı
+     * mumu veri geldiğinde yeniden deneyebilir — çözümleme adımı tekrar çalışsa
+     * bile `pending.candleTime < closed.time` koruması ikinci kez çözmez.
+     */
+    handleClosedCandle(closed: Candle): boolean {
       const { symbol, timeframe, atrMoveFactor } = deps.coinConfig
       const learning = deps.getLearning()
 
@@ -111,13 +121,20 @@ export function createPredictionEngine(deps: PredictionEngineDeps) {
       // 2) yeni tahmin
       const candles = deps.getCandleHistory()
       const book = deps.getBook()
-      if (candles.length < 25 || !book || book.bids.length === 0 || book.asks.length === 0) return
+      if (
+        candles.length < MIN_CANDLES_FOR_PREDICTION ||
+        !book ||
+        book.bids.length === 0 ||
+        book.asks.length === 0
+      ) {
+        return false
+      }
       const features =
         deps.getFeatures() ?? computeFeatures({ candles, book, walls: deps.getWalls() })
-      if (!features) return
+      if (!features) return false
       const atrValue = atr(candles, 14)
       const last = candles[candles.length - 1]
-      if (atrValue == null || atrValue <= 0 || !last) return
+      if (atrValue == null || atrValue <= 0 || !last) return false
 
       const threshold = atrValue * atrMoveFactor
       const current = deps.getLearning()
@@ -137,6 +154,7 @@ export function createPredictionEngine(deps: PredictionEngineDeps) {
       }
       deps.updateLearning((s) => ({ ...s, pending: prediction }))
       deps.onPrediction(prediction)
+      return true
     },
   }
 }

@@ -49,7 +49,7 @@ export function tanhScale(x: number, k: number): number {
   return Math.tanh(x / k)
 }
 
-/** Deterministik string → uint32 (demo seed, test id'leri) */
+/** Deterministik string → uint32 (kararlı anahtar üretimi — rastgelelik kaynağı DEĞİL) */
 export function hashSeed(str: string): number {
   let h = 1779033703 ^ str.length
   for (let i = 0; i < str.length; i++) {

@@ -2,9 +2,13 @@ import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import type { FeedStatus } from '@/entities'
 
+/**
+ * Feed durum göstergesi — yalnızca gerçek bağlantının hâlini bildirir.
+ * Veri gelmiyorsa "veri var" izlenimi veren hiçbir gösterim yoktur.
+ */
+
 const META: Record<FeedStatus, { label: string; dot: string; text: string; pulse?: boolean }> = {
   live: { label: 'CANLI', dot: 'bg-mint', text: 'text-mint' },
-  demo: { label: 'DEMO', dot: 'bg-violet', text: 'text-violet' },
   connecting: { label: 'AÇILIYOR', dot: 'bg-muted', text: 'text-muted', pulse: true },
   reconnecting: { label: 'BAĞLANIYOR', dot: 'bg-amber', text: 'text-amber', pulse: true },
   offline: { label: 'ÇEVRİMDIŞI', dot: 'bg-coral', text: 'text-coral', pulse: true },
@@ -20,13 +24,13 @@ export function StatusPill({
   onTap?: () => void
 }) {
   const m = META[status]
-  const interactive = Boolean(onTap) && (status === 'demo' || status === 'offline')
+  const interactive = Boolean(onTap) && status !== 'live'
   return (
     <button
       type="button"
       onClick={interactive ? onTap : undefined}
       aria-label={`Feed durumu: ${m.label}${error ? ` (${error})` : ''}${
-        interactive ? ' — dokunun ve canlı veriye geçmeyi deneyin' : ''
+        interactive ? ' — dokunun ve bağlantıyı hemen yeniden deneyin' : ''
       }`}
       title={error ?? undefined}
       className={twMerge(

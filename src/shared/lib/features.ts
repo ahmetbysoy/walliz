@@ -8,12 +8,28 @@ export interface FeatureInput {
   atrPeriod?: number
 }
 
+/** Yalnızca fiyat türevi feature'lar — geçmiş kline verisinden hesaplanabilenler. */
+export interface PriceFeatures {
+  momentum: number
+  trend: number
+  volatility: number
+}
+
+export interface PriceFeatureInput {
+  candles: { high: number; low: number; close: number }[]
+  atrPeriod?: number
+}
+
 /**
- * Model feature'ları — hepsi [-1, 1] aralığında (tanh / clamp ölçekleme).
- * Kısım oranları ATR bazlı olduğundan coin'e adaptiftir.
+ * Fiyat türevi feature'lar (mum verisinden).
+ *
+ * Kitapları (orderbook) geçmişe dönük yayınlamayan borsalarda bu üç feature
+ * geçmiş veriyle hesaplanabilir; `imbalance` ve `wallPressure` yalnızca canlı
+ * kitap akışı varsa hesaplanır. `computeFeatures` da bu fonksiyonu kullanır,
+ * böylece canlı ve geçmiş hesap birbirinden sapmaz.
  */
-export function computeFeatures(input: FeatureInput): FeatureVector | null {
-  const { candles, book, walls } = input
+export function computePriceFeatures(input: PriceFeatureInput): PriceFeatures | null {
+  const { candles } = input
   const period = input.atrPeriod ?? 14
   if (candles.length < Math.max(25, period + 2)) return null
   const last = candles[candles.length - 1]
@@ -26,6 +42,32 @@ export function computeFeatures(input: FeatureInput): FeatureVector | null {
   // momentum: son 6 mumun ATR normlu net hareketi
   const ref = candles[candles.length - 7].close
   const momentum = tanhScale((price - ref) / atrValue, 1.5)
+
+  // trend: EMA5 - EMA20 (ATR normlu)
+  const closes = candles.map((c) => c.close)
+  const e5 = ema(closes, 5) ?? 0
+  const e20 = ema(closes, 20) ?? e5
+  const trend = tanhScale((e5 - e20) / atrValue, 1)
+
+  // volatility: ATR/fiyat oranı (0 → -1, %2+ → +1)
+  const volatility = clamp01Safe(atrPct / 0.02) * 2 - 1
+
+  return { momentum, trend, volatility }
+}
+
+/**
+ * Model feature'ları — hepsi [-1, 1] aralığında (tanh / clamp ölçekleme).
+ * Kısım oranları ATR bazlı olduğundan coin'e adaptiftir.
+ */
+export function computeFeatures(input: FeatureInput): FeatureVector | null {
+  const { candles, book, walls } = input
+  const priceFeatures = computePriceFeatures({ candles, atrPeriod: input.atrPeriod })
+  if (!priceFeatures) return null
+  const { momentum, trend, volatility } = priceFeatures
+  const last = candles[candles.length - 1]
+  const price = last.close
+  const atrValue = atr(candles, input.atrPeriod ?? 14)
+  if (atrValue == null || atrValue <= 0) return null
 
   // imbalance: üst 10 seviyenin kümülatif derinlik farkı
   const topDepth = (levels: { total: number }[]): number =>
@@ -54,15 +96,6 @@ export function computeFeatures(input: FeatureInput): FeatureVector | null {
   const bidEffect = db ? db.strength / (1 + db.dist) : 0
   const askEffect = da ? da.strength / (1 + da.dist) : 0
   const wallPressure = clamp(bidEffect - askEffect, -1, 1)
-
-  // trend: EMA5 - EMA20 (ATR normlu)
-  const closes = candles.map((c) => c.close)
-  const e5 = ema(closes, 5) ?? 0
-  const e20 = ema(closes, 20) ?? e5
-  const trend = tanhScale((e5 - e20) / atrValue, 1)
-
-  // volatility: ATR/fiyat oranı (0 → -1, %2+ → +1)
-  const volatility = clamp01Safe(atrPct / 0.02) * 2 - 1
 
   return { momentum, imbalance, wallPressure, trend, volatility }
 }

@@ -1,4 +1,4 @@
-/** Coin metadata ve global sabitler. */
+/** Coin metadata, borsa uç noktaları ve global sabitler. */
 
 export interface CoinConfig {
   symbol: string
@@ -9,12 +9,6 @@ export interface CoinConfig {
   /** ATR çarpanı: anlamlı hareket eşiği = atrMoveFactor * ATR(14) */
   atrMoveFactor: number
   priceDecimals: number
-  /** Demo feed başlangıç fiyatı */
-  demoBasePrice: number
-  /** Demo feed tick volatilitesi */
-  demoVol: number
-  /** Demo feed tipik seviye hacmi */
-  demoQtyScale: number
 }
 
 export const COINS: CoinConfig[] = [
@@ -25,9 +19,6 @@ export const COINS: CoinConfig[] = [
     wallMultiplier: 2.2,
     atrMoveFactor: 0.35,
     priceDecimals: 2,
-    demoBasePrice: 67400,
-    demoVol: 0.0003,
-    demoQtyScale: 2.0,
   },
   {
     symbol: 'ETHUSDT',
@@ -36,9 +27,6 @@ export const COINS: CoinConfig[] = [
     wallMultiplier: 2.0,
     atrMoveFactor: 0.35,
     priceDecimals: 2,
-    demoBasePrice: 3520,
-    demoVol: 0.00045,
-    demoQtyScale: 40,
   },
   {
     symbol: 'SOLUSDT',
@@ -47,9 +35,6 @@ export const COINS: CoinConfig[] = [
     wallMultiplier: 1.8,
     atrMoveFactor: 0.3,
     priceDecimals: 2,
-    demoBasePrice: 182,
-    demoVol: 0.0006,
-    demoQtyScale: 300,
   },
   {
     symbol: 'DOGEUSDT',
@@ -58,9 +43,6 @@ export const COINS: CoinConfig[] = [
     wallMultiplier: 1.4,
     atrMoveFactor: 0.25,
     priceDecimals: 5,
-    demoBasePrice: 0.1624,
-    demoVol: 0.0009,
-    demoQtyScale: 90000,
   },
   {
     symbol: 'AVAXUSDT',
@@ -69,14 +51,15 @@ export const COINS: CoinConfig[] = [
     wallMultiplier: 1.7,
     atrMoveFactor: 0.3,
     priceDecimals: 3,
-    demoBasePrice: 38.4,
-    demoVol: 0.0007,
-    demoQtyScale: 600,
   },
 ]
 
 export function getCoin(symbol: string): CoinConfig {
   return COINS.find((c) => c.symbol === symbol) ?? COINS[0]
+}
+
+export function isKnownSymbol(symbol: string): boolean {
+  return COINS.some((c) => c.symbol === symbol)
 }
 
 export interface Timeframe {
@@ -102,16 +85,50 @@ const env: Record<string, string | undefined> =
     ? (import.meta as { env: Record<string, string> }).env
     : {}
 
+function hostList(raw: string | undefined, fallback: string[]): string[] {
+  if (!raw) return fallback
+  const list = raw
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, ''))
+    .filter(Boolean)
+  return list.length > 0 ? list : fallback
+}
+
+/**
+ * Gerçek borsa uç noktaları (Binance).
+ * - `${}@depth20@100ms` + `${}@kline_*` + `${}@ticker` birleşik stream (canlı)
+ * - `/api/v3/klines` geçmiş mum (REST)
+ * Yedek host'lar gerçek Binance uç noktalarıdır: birincil host'a erişilemezse
+ * (bölgesel blok / 451 / geçici kesinti) veri yine gerçek borsadan gelir.
+ */
 export const WS_BASE = env.VITE_BINANCE_WS || 'wss://stream.binance.com:9443'
+export const WS_FALLBACKS = hostList(env.VITE_BINANCE_WS_FALLBACKS, [
+  'wss://stream.binance.com:443',
+  'wss://data-stream.binance.vision',
+])
+
 export const REST_BASE = env.VITE_BINANCE_REST || 'https://api.binance.com'
-export const DEMO_MODE_FORCED = env.VITE_DEMO_MODE === '1'
-export const DEMO_SEED = env.VITE_DEMO_SEED || ''
+export const REST_FALLBACKS = hostList(env.VITE_BINANCE_REST_FALLBACKS, [
+  'https://data-api.binance.vision',
+])
+
+/** Grafikte tutulan ve REST'ten çekilen mum adedi (Binance tek istekte en çok 1000 verir) */
+export const MAX_CANDLES = 500
+export const HISTORY_LIMIT = MAX_CANDLES
+
+/** Bağlantı sağlığı eşikleri (ms) */
+export const RECONNECT_BASE_MS = 1_000
+export const RECONNECT_MAX_MS = 30_000
+export const HEARTBEAT_MS = 30_000
+export const WATCHDOG_INTERVAL_MS = 10_000
+export const REST_TIMEOUT_MS = 8_000
+/** Üst üste bu kadar kopma sonrası status 'offline' (denemeler yine sürer) */
+export const OFFLINE_AFTER_ATTEMPTS = 5
+/** Geçmiş mum alınamazsa yeniden deneme aralığı (ms) */
+export const HISTORY_RETRY_MS = 20_000
 
 export const WALL_DETECTION = {
   window: 3,
   maxWalls: 3,
   stableAfterTicks: 5,
 } as const
-
-export const DEMO_TICK_MS = 500
-export const DEMO_CANDLE_MS = 8_000

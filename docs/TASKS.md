@@ -19,11 +19,11 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 
 ## Faz 2 — Veri
 
-- [x] T201 MarketFeed arayüzü + `createMarketFeed` fabrikası (auto/live/demo)
-- [x] T202 Demo feed: seed'li RNG (mulberry32), deterministik, 180 mum geçmiş, periyodik duvarlar
-- [x] T203 Live feed: combined WS (depth20@100ms + kline + ticker) + zod şemaları
+- [x] T201 MarketFeed arayüzü + `createMarketFeed` fabrikası (yalnız gerçek canlı veri; demo modu kaldırıldı — bkz. Faz 8)
+- [x] T202 ~~Demo feed~~ → **kaldırıldı** (simülasyon yasağı); yerine gerçek REST kline geçmişi + sıralama/birleştirme kuralları
+- [x] T203 Live feed: combined WS (depth20@100ms + kline + ticker) + zod şemaları + WS/REST host rotasyonu
 - [x] T204 Reconnect: exponential backoff (1→30s) + heartbeat 30s + visibility + network API
-- [x] T205 Demo ↔ Live otomatik geçiş + StatusPill (tıkla → forceLive)
+- [x] T205 Bağlantı durumu yönetimi (connecting/live/reconnecting/offline) + StatusPill (tıkla → retryNow)
 - [x] T206 Orderbook normalizasyonu (decimal.js-light, kümülatif derinlik) + test
 - [x] T207 marketStore (zustand) — feed event'leri → state + test
 - [x] T208 IndexedDB kalıcılık (idb-keyval) + v1→v2 migrasyon + 90 gün temizliği + test
@@ -43,7 +43,7 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 - [x] T402 PredictionModel (saf TS) — predict/learn/migrate/reset + test
 - [x] T403 Duvar tespiti (adaptif eşik, kümülatif pencere, WallTracker ömür) + test
 - [x] T404 Web Worker (duvar + feature) + inline fallback + test
-- [x] T405 Backtest script (`npm run backtest`, sentetik seri)
+- [x] T405 Backtest script (`npm run backtest`, **gerçek** Binance kline verisi; `KLINES_FILE` ile dosyadan)
 - [x] T406 `docs/MODEL.md` — model matematiği
 
 ## Faz 5 — UI/UX
@@ -60,11 +60,70 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 ## Faz 6 — Kalite
 
 - [x] T601 Unit testler (detectWalls, model, normalize, format, rng, buckets, migrasyon, store)
-- [x] T602 Integration testler (demo feed→store→UI, mock WS→state, backoff→fallback)
+- [x] T602 Integration testler (canlı feed tel formatı→store→UI, backoff/host rotasyonu, veri yokken üretim yok kontrolü)
 - [x] T603 E2E Playwright (iPhone 13 / Pixel 5 / Desktop) — sandbox'ta browser yok, CI'da çalışır
-- [x] T604 PWA: manifest + ikonlar (192/512/maskable) + SW (offline → demo)
+- [x] T604 PWA: manifest + ikonlar (192/512/maskable) + SW (kabuk önbellekte, borsa yanıtları NetworkOnly)
 - [x] T605 Performans: throttle, format cache, memo, lazy chart
 - [ ] T606 Lighthouse CI (Performance > 90, A11y > 95) — ⏸ (deploy sonrası)
+
+## Faz 8 — Gerçek veri & dayanıklılık (bu oturum)
+
+- [x] T801 `Cannot update oldest data, last time=[object Object], new time=[object Object]` çökmesinin kök nedeni
+      (series.update'e geriye giden zaman) ve kalıcı çözümü: `chart/lib/chartSync.ts` senkron planı
+- [x] T802 Mum penceresi sıralama garantisi (`shared/lib/candles.ts`): artan + tekil liste, geçmiş↔canlı birleştirme
+- [x] T803 Simülasyon/mock katmanının tamamen kaldırılması (demoFeed, demoRng, DEMO_* env/sabitler, 'demo' durumu)
+- [x] T804 Bağlantı dayanıklılığı: WS/REST host rotasyonu, ±%20 jitter'lı backoff, watchdog, sonsuz yeniden deneme
+- [x] T805 Ağ durumu entegrasyonu (online/offline olayları, `retryNow`) + `ConnectionNotice` uyarısı
+- [x] T806 Grafik boş durumu: veri yokken uydurma mum yerine durum mesajı + "Yeniden bağlan"
+- [x] T807 SW: borsa yanıtları NetworkOnly (eski fiyatı canlı gibi göstermeme)
+- [x] T808 Backtest'in gerçek Binance kline verisiyle çalışması (kitap feature'ları ablasyonla kapatılır)
+- [x] T809 Regresyon testleri: `planChartSync`, `upsertCandle`/`mergeHistory`, feed dayanıklılığı, veri uydurulmadığı kontrolü
+- [x] T810 Opt-in gerçek ağ testi (`LANKA_LIVE_NETWORK=1`)
+- [x] T811 Dokümantasyonun gerçek veri mimarisine güncellenmesi (SPEC/ARCHITECTURE/README/TASKS)
+
+## Faz 9 — CI / Actions / Codespaces (bu oturum)
+
+- [x] T901 İş yükü GitHub Actions'a taşındı: `ci/ci.yml` (quality + E2E, concurrency iptali, artifact'ler)
+- [x] T902 `ci/market-watch.yml`: günlük gerçek-veri nöbeti (tel formatı sözleşme testi + çok sembollü backtest + JSON rapor + iş özeti)
+- [x] T903 E2E dayanıklılığı: borsa erişimini önce yokla; erişim yoksa akış testleri atlanır, dürüst çevrimdışı testleri koşar (yanlış kırmızı yok)
+- [x] T904 `scripts/backtest.ts`: `SYMBOLS` (çok sembol) ve `REPORT_JSON` (CI artifact'i) desteği
+- [x] T905 `ci/enable-actions.sh` + `ci/README.md`: `workflows` izni engelinin 3 çözüm yolu
+- [x] T906 Codespaces: `.devcontainer/devcontainer.json` (Node 22, GH CLI, port yönlendirme, eklentiler) + README rozeti
+- [x] T907 Editör ayarları: `.vscode/settings.json`, `.vscode/extensions.json`
+- [x] T908 `npm run test:live` (canlı borsa sözleşme testi) + backtest çekirdeği için birim testleri
+
+## Faz 9b — GitHub Pages yayını (bu oturum)
+
+- [x] T910 Taban yol desteği: `vite.config.ts` `VITE_BASE_PATH` → `base`, PWA `start_url`/`scope`,
+      SW `navigateFallback`, `index.html` `%BASE_URL%` referansları
+- [x] T911 `scripts/deploy-pages.sh`: dist'i `gh-pages` dalına tek commit olarak force-push (izin gerektirmez)
+- [x] T912 `ci/deploy-pages.yml`: Actions ile otomatik Pages yayını (kalite kapıları + artifact + deploy)
+- [x] T913 Alt-dizin doğrulaması: `/walliz/` altında tüm varlıkların (js/css/sw/manifest/ikon) 200 döndüğü yerelde kanıtlandı
+- [ ] T914 Pages'in açılması: Settings → Pages → Source (repo sahibi; API izni App'te yok — 403)
+
+## Faz 10 — Gerçek tel formatı denetimi (bu oturum)
+
+Kullanıcı bildirimi: "readme'deki özelliklerin çoğu çalışmıyor". Kök neden, feed'in kendi
+test double'larıyla doğrulanan **yanlış tel formatı varsayımlarıydı** (testler kendi
+varsayımını doğruladığı için yeşil kalıyordu). Resmî dokümanla karşılaştırıldı
+(`binance/binance-spot-api-docs`):
+
+- [x] T1001 **Kısmi derinlik yükü**: `{ lastUpdateId, bids, asks }` — şema `e: 'depth20'`
+      istiyordu, gerçek yükte `e` YOK → sipariş kitabı hiç dolmuyordu. Mesaj tipi artık
+      yükün şeklinden tanınır (`isDepthSnapshot`); güncelleme kimliği `lastUpdateId`.
+      Etkisi: orderbook paneli, spread, duvar tespiti, `imbalance`/`wallPressure`
+      ve (kitap şartı nedeniyle) tahmin/kovalar/hafıza tamamen ölüydü.
+- [x] T1002 **Ticker yükü**: 24s yüksek/düşük küçük harf `h`/`l`; şema `H`/`L` istiyordu
+      (büyük `L` gerçekte "son işlem kimliği") → her ticker mesajı düşüyordu; fiyat/24s
+      değişim/hacim hiç gelmiyordu.
+- [x] T1003 Sözleşme testi: `tests/integration/binanceWireContract.test.ts` — resmî
+      dokümandan birebir yüklerle üç akış (derinlik/kline/ticker) + büyük harf `L` tuzağı.
+- [x] T1004 Orderbook derinlik çubukları: ölçek en iyi seviyenin kümülatifi yerine
+      taraftaki **en derin** kümülatif toplamdan alınıyor (çubuklar tavana yapışmıyordu).
+- [x] T1005 Spread yüzdesi oran yerine yüzde olarak biçimleniyor (`+0.01%`), `—` durumu
+      renkli "düşüş" olarak gösterilmiyor.
+- [x] T1006 Radix `Select`: ipucu `ItemText` dışına alındı (tetikleyicide "BTC Bitcoin"
+      taşması), `ConfidenceBar` aria etiketi gerçek yüzdeyi taşıyor.
 
 ## Faz 7 — Yayın
 

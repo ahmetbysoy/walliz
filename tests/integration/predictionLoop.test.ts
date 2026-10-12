@@ -130,6 +130,27 @@ describe('prediction loop (kapalı mum → tahmin → çözüm → öğrenme)', 
     expect(ctx.learning.stats.neutrals).toBe(1)
   })
 
+  it('ön koşul eksikse false döner (çağıran taraf bekleyen mumu yeniden deneyebilir)', () => {
+    const learning = createEmptyLearningState()
+    const engine = createPredictionEngine({
+      getCandleHistory: () => candles(40),
+      getBook: () => null, // kitap henüz gelmedi
+      getWalls: () => [],
+      getFeatures: () => null,
+      getLearning: () => learning,
+      updateLearning: () => {},
+      coinConfig: { symbol: 'BTCUSDT', timeframe: '1m', atrMoveFactor: 0.35 },
+      onPrediction: () => {},
+      onResolved: () => {},
+    })
+    expect(engine.handleClosedCandle(candles(40)[39])).toBe(false)
+  })
+
+  it('tahmin üretildiğinde true döner', () => {
+    const ctx = setup()
+    expect(ctx.engine.handleClosedCandle(ctx.candleList[39])).toBe(true)
+  })
+
   it('yetersiz mumda tahmin üretmez', () => {
     const learning = createEmptyLearningState()
     const predictions: Prediction[] = []

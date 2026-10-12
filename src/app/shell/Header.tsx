@@ -7,7 +7,7 @@ import { formatPct, formatPrice } from '@/shared/lib/format'
 import { loadPreferences, savePreferences } from '@/shared/lib/learningRepo'
 import { useMarketStore } from '@/shared/model/marketStore'
 
-export function Header({ forceLive }: { forceLive: () => void }) {
+export function Header({ onRetry }: { onRetry: () => void }) {
   const status = useMarketStore((s) => s.status)
   const feedError = useMarketStore((s) => s.feedError)
   const symbol = useMarketStore((s) => s.symbol)
@@ -28,7 +28,7 @@ export function Header({ forceLive }: { forceLive: () => void }) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 px-3 pb-2 pt-[env(safe-area-inset-top)] backdrop-blur">
       <div className="flex items-center justify-between gap-2">
-        <StatusPill status={status} error={feedError} onTap={forceLive} />
+        <StatusPill status={status} error={feedError} onTap={onRetry} />
         <div className="flex items-center gap-2">
           <CoinSelect value={symbol} onChange={changeSymbol} />
           <TimeframeChips value={timeframe} onChange={changeTf} />

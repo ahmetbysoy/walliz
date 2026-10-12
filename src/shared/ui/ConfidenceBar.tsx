@@ -11,7 +11,7 @@ export function ConfidenceBar({ value, className }: { value: number; className?:
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={pct}
-      aria-label={`Güven %{pct}`}
+      aria-label={`Güven %${pct}`}
       className={twMerge(clsx('h-2 w-full overflow-hidden rounded-full bg-surface-2', className))}
     >
       <motion.div

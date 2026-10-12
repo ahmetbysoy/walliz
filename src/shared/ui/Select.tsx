@@ -56,10 +56,11 @@ export function Select({
                 value={o.value}
                 className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-text outline-none data-[highlighted]:bg-surface-2 data-[state=checked]:text-mint"
               >
-                <RSelect.ItemText>
-                  {o.label}
-                  {o.hint ? <span className="ml-2 text-xs text-muted">{o.hint}</span> : null}
-                </RSelect.ItemText>
+                {/* İpucu ItemText DIŞINDA durur: Radix seçili ItemText'i tetikleyiciye
+                    kopyaladığı için ipucu içeride kalırsa dar başlıkta "BTC Bitcoin"
+                    gibi taşan bir etiket görünür. */}
+                <RSelect.ItemText>{o.label}</RSelect.ItemText>
+                {o.hint ? <span className="ml-auto text-xs text-muted">{o.hint}</span> : null}
                 <RSelect.ItemIndicator>
                   <Check className="size-4" aria-hidden />
                 </RSelect.ItemIndicator>

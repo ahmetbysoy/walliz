@@ -1,0 +1,120 @@
+name: CI
+
+# Bu dosya `ci/` altında duruyor çünkü oturumun GitHub App'i `workflows` iznine sahip değil.
+# Devreye almak için: `bash ci/enable-actions.sh` (bkz. ci/README.md) veya GitHub App'e
+# "Workflows: Read and write" iznini verin.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Aynı dal/PR için önceki çalıştırmayı iptal et — kuyruk birikmesin
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  quality:
+    name: Lint · Format · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      - name: Lint (ESLint + feature sınırları)
+        run: npm run lint
+
+      - name: Biçim kontrolü (Prettier)
+        run: npm run format:check
+
+      - name: Birim + entegrasyon testleri (kapsam eşiği %70)
+        run: npm run test:coverage
+
+      - name: Tip kontrolü + production build (PWA dahil)
+        run: npm run build
+
+      - name: Kapsam raporunu yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  e2e:
+    name: E2E (Playwright · gerçek veri veya dürüst çevrimdışı)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Bağımlılıkları kur
+        run: npm ci
+
+      - name: Playwright tarayıcısı (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      # Borsa uç noktaları bazı CI bölgelerinden engelli olabilir (ör. US runner'larında
+      # api.binance.com 451 döner). Erişilebilen gerçek host'u seçip teste bildiriyoruz —
+      # erişim yoksa testler uydurma veri beklemez, dürüst çevrimdışı davranışı doğrular.
+      - name: Borsa erişimini yokla ve host seç
+        id: probe
+        run: |
+          set -euo pipefail
+          found=""
+          for host in https://api.binance.com https://data-api.binance.vision; do
+            code=$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$host/api/v3/ping" || true)
+            echo "$host → HTTP $code"
+            if [ "$code" = "200" ] && [ -z "$found" ]; then found="$host"; fi
+          done
+          if [ -n "$found" ]; then
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+            echo "host=$found" >> "$GITHUB_OUTPUT"
+            echo "VITE_BINANCE_REST=$found" >> "$GITHUB_ENV"
+            echo "### Borsa erişimi: \`$found\` ✅" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Hiçbir gerçek Binance host'una erişilemedi — E2E çevrimdışı davranışı doğrulayacak (uydurma veri yok)."
+            echo "### Borsa erişimi: yok ⚠️ — yalnızca çevrimdışı dürüstlük testleri anlamlı" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: E2E (iPhone 13 · Pixel 5 · Desktop)
+        run: npm run test:e2e
+
+      - name: Playwright raporunu yükle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      - name: Hata izlerini yükle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

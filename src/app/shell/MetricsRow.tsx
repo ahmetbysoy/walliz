@@ -26,7 +26,7 @@ export function MetricsRow() {
       <MetricCard
         label="24s Değişim"
         value={ticker ? formatPct(ticker.changePct) : '—'}
-        variant={ticker && ticker.changePct >= 0 ? 'up' : 'down'}
+        variant={ticker ? (ticker.changePct >= 0 ? 'up' : 'down') : 'default'}
         sub={ticker ? `Yüksek: ${formatPrice(ticker.high24h, coin.priceDecimals)}` : undefined}
       />
       <MetricCard
