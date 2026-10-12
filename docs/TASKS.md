@@ -54,8 +54,8 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
 - [x] T504 Hafıza paneli: ağırlık barları, istatistikler, son doğrulamalar, export/import/reset
 - [x] T505 Gestürler: yatay swipe tab geçişi, pull-to-refresh (feed restart), haptic
 - [x] T506 Erişilebilirlik: aria-label, klavye, reduced-motion, grafik aria
-- [ ] T507 Light mode toggle (token'lar hazır) — ⏸
-- [ ] T508 Renk körü modu UI toggle (token'lar hazır) — ⏸
+- [x] T507 Light mode toggle (token'lar hazır, Ayarlar paneline entegre edildi)
+- [x] T508 Renk körü modu UI toggle (Ayarlar paneline entegre edildi)
 
 ## Faz 6 — Kalite
 
@@ -98,6 +98,33 @@ Durum: ✅ tamamlandı · 🚧 devam ediyor · ⬜ bekliyor · ⏸ ertelendi (bi
       SW `navigateFallback`, `index.html` `%BASE_URL%` referansları
 - [x] T911 `scripts/deploy-pages.sh`: dist'i `gh-pages` dalına tek commit olarak force-push (izin gerektirmez)
 - [x] T912 `ci/deploy-pages.yml`: Actions ile otomatik Pages yayını (kalite kapıları + artifact + deploy)
+
+## Faz 10 — Mobil UX ve Ekran Bütçesi Yeniden Tasarımı (LANKA v2 Redesign)
+
+- [x] **Adım 0 (Baseline):** 390×844, 360×640 ve 844×390 viewports için başlangıç geometrileri Playwright ile ölçüldü ve `docs/UX_BASELINE.md` dosyasına kaydedildi.
+- [x] **T-P0-1:** Tek satırlık Header (≤56px) — Coin seçici + canlı fiyat + 24s yüzde değişim tek satıra toplandı.
+- [x] **T-P0-2:** Zaman dilimi (Timeframe) seçici header altından mum grafiğinin araç çubuğuna taşındı.
+- [x] **T-P0-3:** 4 kartlık dikey MetricsRow (194px) kaldırılarak yerine tek satırlık yatay kaydırılabilir (24px) istatistik şeridi yerleştirildi.
+- [x] **T-P0-4:** Grafik alanı dinamik yüksekliğe (`flex-1`, viewport ≥%45, min-h 260px) kavuşturuldu; küçük cihazlarda nav ile çakışma giderildi.
+- [x] **T-P0-5:** PredictionCard sabit 182px blok yerine tek satırlık interaktif buton yapıldı; tıklandığında Vaul Bottom Sheet açılıyor.
+- [x] **T-P0-6:** Header dikey kaydırmada otomatik gizlenme/görünme davranışına kavuşturuldu (scroll direction threshold).
+- [x] **T-P1-1:** 4 tab 3 tab'a indirildi: `Grafik`, `Duvarlar`, `Model` (Model içinde Kovalar, Hafıza ve Ayarlar alt sekmeleri).
+- [x] **T-P1-2:** Yalnızca aktif olan sekme DOM'a mount ediliyor (arka plandaki grafik/tablo CPU yükü sıfırlandı).
+- [x] **T-P1-3:** İlk açılışta ve yardım butonunda 3 kartlık interaktif mini rehber (Onboarding) eklendi.
+- [x] **T-P1-4:** Duvar etiketleri sade Türkçe yapıldı ("Alış Duvarı", "Satış Duvarı") ve grafik üstündeki fiyat çizgileri en güçlü 3 duvarla sınırlandı.
+- [x] **T-P1-5:** Grafiğin araç çubuğuna en yakın duvar seviyesini ve mesafesini gösteren interaktif çip eklendi; tıklandığında Duvarlar sekmesine yönlendiriyor.
+- [x] **T-P1-6:** Model güveni "Sinyal Gücü %X" olarak adlandırıldı; <20 doğrulamada "(yeterli veri yok)", ≥20 doğrulamada gerçek geçmiş isabet oranı eklendi.
+- [x] **T-P1-7:** Tüm dokunmatik etkileşim alanları minimum 44×44px kuralına uyarlandı.
+- [x] **T-P2-1:** Fiyat duvara yaklaştığında (%0.2) ve duvar kırıldığında ses/titreşim, toast ve Notification bildirimleri (Wall Alerts).
+- [x] **T-P2-2:** Coin seçiciye anlık arama ve favori yıldızlama desteği eklendi.
+- [x] **T-P2-3:** Grafik araç çubuğuna tam ekran (fullscreen) / yatay mod butonu eklendi.
+- [x] **T-P2-4:** Ayarlar alt sekmesine Light Mode, Renk Körü Modu, Titreşim (Haptics) ve Fiyat Alarmları açma/kapama toggles eklendi.
+- [x] **T-P2-5:** Duvarlar tablosunda satıra dokunulduğunda alarm kurma / grafikte vurgulama özelliği eklendi.
+- [x] **T-P2-6:** Veri yüklenirken ve feed açılırken Skeleton yer tutucuları eklendi.
+- [x] **T-P3-1:** Tek jest bağlamı (single gesture context) ile grafik pan/zoom ve yatay kaydırmalar swipe çakışmasından izole edildi.
+- [x] **T-P3-2:** Dokümantasyon (`SPEC.md`, `TASKS.md`, `UX_BASELINE.md`, `BACKLOG.md`) güncellendi.
+- [x] **T-P3-3:** `tests/e2e/layout.spec.ts` ile tüm ekran geometrileri ve kabul kriterleri CI'da otomatik doğrulanabilir kılındı.
+
 - [x] T913 Alt-dizin doğrulaması: `/walliz/` altında tüm varlıkların (js/css/sw/manifest/ikon) 200 döndüğü yerelde kanıtlandı
 - [ ] T914 Pages'in açılması: Settings → Pages → Source (repo sahibi; API izni App'te yok — 403)
 

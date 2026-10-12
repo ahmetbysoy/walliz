@@ -187,22 +187,24 @@ Matematik detayı: `docs/MODEL.md`. Özet:
 - **Export/Import:** JSON indirme / dosya yükleme (zod doğrulamalı).
 - **Otomatik temizlik:** 90 günden eski `recent` kayıtları load/save'de elenir.
 
-## 7. UI/UX (mobil öncelikli)
+## 7. UI/UX (mobil öncelikli — LANKA v2 Redesign)
 
-- **Sticky header:** status pill + coin seçici (Radix Select) + timeframe chips (1m/5m/15m/1h) + büyük fiyat.
-- **Alt navigasyon:** 4 tab (Grafik, Duvarlar, Kovalar, Hafıza); yatay swipe ile tab geçişi;
-  satır detayı long-press → vaul bottom sheet.
-- **Pull-to-refresh:** feed yeniden başlar (spinner geri bildirimli).
-- **Grafik:** lightweight-charts; duvarlar `createPriceLine` (yanılgı değil: fiyat çizgisi + etiket),
-  duvar gücüne göre opaklık; volume histogram alt overlay; `series.update` ile gerçek zamanlı;
-  `ResizeObserver`; çift dokunuş → fit; `role="img"` + dinamik aria-label.
-- **Bileşenler:** `MetricCard` (variant: default/price/up/down), `OrderbookRow` (React.memo),
-  `WallBadge`, `SignalOrb` (pulse), `ConfidenceBar` (spring), `PyramidBucket` (expand/collapse),
-  `LearningPanel` (ağırlık barları + son doğrulamalar), `EmptyState`, `Skeleton`.
-- **Haptic:** tahmin çözülünce `navigator.vibrate(50)`, duvar görünce 20 ms, tab geçişinde 10 ms (destekleyen cihazlarda).
-- **Tema:** dark default; `prefers-color-scheme` uyumlu token'lar; **renk körü modu** (`--mint/--coral` → mavi/turuncu).
-- **Erişilebilirlik:** aria-label her yerde, klavye navigasyonu, `prefers-reduced-motion` → animasyon kapatılır.
-- **Safe area:** `env(safe-area-inset-*)` padding'ler.
+- **Sticky Header (≤56px):** Coin seçici (arama + favoriler) + canlı fiyat + 24s yüzde değişim tek satırda; aşağı kaydırmada otomatik gizlenme (`-translate-y-full`), yukarı kaydırmada geri gelme.
+- **İstatistik Şeridi (MetricsRow):** 4 kartlık dikey blok yerine tek satırlık yatay kaydırılabilir özet şerit (24s Y/D, Hacim, Spread, Derinlik).
+- **Zaman Dilimi Seçicisi:** Header altından çıkarılıp doğrudan mum grafiğinin üst araç çubuğuna taşındı.
+- **Grafik Çizim Alanı:** Dinamik yükseklik (`flex-1`, ekranın ≥%45'i, min-h 260px); lightweight-charts; duvarlar `createPriceLine` (en güçlü ilk 3 duvar etiketli, diğerleri ince çizgi); çift dokunuş → fit; tam ekran butonu (landscape & Fullscreen API).
+- **En Yakın Duvar Çipi:** Grafik araç çubuğunda güncel fiyata en yakın duvar seviyesi ve mesafesini gösterir; dokunulduğunda Duvarlar paneline yönlendirir.
+- **Kompakt Model Tahmin Şeridi & Bottom Sheet:** Sabit 182px blok yerine tek satırlık (44px) özet buton; dokunulduğunda tam `Vaul` tabanlı Model Tahmin & Sinyal Analizi Bottom Sheet açılır.
+- **Bilgi Mimarisi (3 Tab):** `Grafik`, `Duvarlar`, `Model` (Model sekmesi içinde alt sekmeler: `Kovalar`, `Hafıza`, `Ayarlar`).
+- **Panel Yaşam Döngüsü:** Yalnızca aktif olan sekme DOM'a mount edilir (bellek ve CPU optimizasyonu).
+- **Sinyal Gücü Terminolojisi:** "Güven" yerine yanıltıcı olmayan "Sinyal Gücü %X" ve modelin gerçek geçmiş isabet oranı (≥20 örnekte) gösterilir.
+- **Türkçe Yalın Duvar Etiketleri:** "Alış Duvarı (Destek)", "Satış Duvarı (Direnç)"; kafa karıştırıcı jargon temizlendi.
+- **Duvar Alarmları:** Fiyat duvara %0.2 yaklaştığında veya duvar kırıldığında ses/titreşim, Sonner toast ve Web Notification API bildirimi.
+- **Orderbook Etkileşimi:** Duvarlar tablosunda satıra dokunarak duvara alarm kurma veya grafikte vurgulama.
+- **Ayarlar:** Açık/Koyu tema (Light/Dark mode), Renk Körü Modu (Mavi/Turuncu), Dokunsal Geri Bildirim (Haptics) ve Fiyat Alarmları açma/kapama kontrolleri.
+- **Onboarding (Rehber):** İlk açılışta veya yardım butonunda 3 adımlı interaktif mini rehber ("Duvar Nedir?", "Sinyal Gücü Ne Demek?", "Nasıl Okunur?").
+- **Minimum Dokunmatik Alan:** Tüm butonlar ve etkileşimli alanlar mobil standartlarına uygun ≥44×44px (kompakt araç çubuklarında min 32px + 44px hitbox).
+- **Safe Area & Landscape:** `env(safe-area-inset-*)` uyumu, yatay modda (landscape) 36px header ve 37px nav ile maksimum grafik alanı.
 
 ## 8. Performans
 

@@ -14,7 +14,7 @@ export function CoinSelect({
       onValueChange={onChange}
       ariaLabel="Coin seç"
       options={COINS.map((c) => ({ value: c.symbol, label: c.base, hint: c.name }))}
-      className="min-w-[104px]"
+      className="min-h-[44px] h-8 px-2.5 py-1 text-sm font-semibold min-w-[76px]"
     />
   )
 }

@@ -27,10 +27,24 @@
   color-scheme: dark;
 }
 
+[data-theme='light'] {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #e8edf3;
+  --line: #d1dbe5;
+  --text: #121824;
+  --muted: #5e6f84;
+  --mint: #059669;
+  --coral: #dc2626;
+  --violet: #7c3aed;
+  --amber: #d97706;
+  color-scheme: light;
+}
+
 /* Renk körü dostu alternatif: yeşil/kırmızı → mavi/turuncu */
 [data-colorblind='on'] {
-  --mint: #4c9ffe;
-  --coral: #ff9e42;
+  --mint: #3b82f6;
+  --coral: #f97316;
 }
 
 html,
@@ -59,6 +73,15 @@ body {
 
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Scrollbar gizleme yardımcı sınıfı */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

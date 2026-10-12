@@ -2,7 +2,7 @@ import { forwardRef } from 'react'
 import { clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
-type Variant = 'default' | 'ghost' | 'danger' | 'subtle'
+type Variant = 'default' | 'primary' | 'ghost' | 'danger' | 'subtle'
 type Size = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -12,6 +12,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variants: Record<Variant, string> = {
   default: 'bg-surface-2 border border-line text-text hover:bg-line/60 active:scale-[0.98]',
+  primary: 'bg-mint border border-mint text-bg font-semibold hover:bg-mint/90 active:scale-[0.98]',
   ghost:
     'bg-transparent border border-transparent text-muted hover:text-text hover:bg-surface-2/60',
   danger: 'bg-coral/10 border border-coral/30 text-coral hover:bg-coral/20',

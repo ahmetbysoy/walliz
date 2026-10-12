@@ -144,7 +144,13 @@ export async function loadPreferences(): Promise<Preferences> {
     raw?.timeframe && TIMEFRAMES.some((t) => t.id === raw.timeframe)
       ? (raw.timeframe as string)
       : TIMEFRAMES[0].id
-  return { symbol, timeframe, colorblind: raw?.colorblind === true }
+  const base: Preferences = { symbol, timeframe, colorblind: raw?.colorblind === true }
+  if (raw?.theme !== undefined) base.theme = raw.theme
+  if (raw?.haptics !== undefined) base.haptics = raw.haptics
+  if (raw?.favorites !== undefined) base.favorites = raw.favorites
+  if (raw?.wallAlertThreshold !== undefined) base.wallAlertThreshold = raw.wallAlertThreshold
+  if (raw?.hasSeenIntro !== undefined) base.hasSeenIntro = raw.hasSeenIntro
+  return base
 }
 
 export async function savePreferences(p: Preferences): Promise<void> {

@@ -79,4 +79,9 @@ export interface Preferences {
   symbol: string
   timeframe: string
   colorblind: boolean
+  theme?: 'dark' | 'light'
+  haptics?: boolean
+  favorites?: string[]
+  wallAlertThreshold?: number
+  hasSeenIntro?: boolean
 }

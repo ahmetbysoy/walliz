@@ -1,24 +1,49 @@
 import { defineConfig, devices } from '@playwright/test'
+import chromium from '@sparticuz/chromium'
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 60_000,
+  timeout: 30_000,
   expect: { timeout: 10_000 },
-  fullyParallel: true,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  fullyParallel: false,
+  workers: 1,
+  reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:4173',
+    baseURL: 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
+    browserName: 'chromium',
+    launchOptions: {
+      executablePath: '/tmp/chromium',
+      args: chromium.args.filter((a) => !a.includes('headless') && a !== '--single-process'),
+    },
   },
   webServer: {
-    command: 'npm run build && npm run preview',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    command: 'npm run preview -- --host 127.0.0.1 --port 4173',
+    url: 'http://127.0.0.1:4173',
+    reuseExistingServer: true,
+    timeout: 30_000,
   },
   projects: [
-    { name: 'iphone-13', use: { ...devices['iPhone 13'] } },
-    { name: 'pixel-5', use: { ...devices['Pixel 5'] } },
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'iphone-13',
+      use: {
+        ...devices['iPhone 13'],
+        defaultBrowserType: 'chromium',
+      },
+    },
+    {
+      name: 'pixel-5',
+      use: {
+        ...devices['Pixel 5'],
+        defaultBrowserType: 'chromium',
+      },
+    },
+    {
+      name: 'desktop',
+      use: {
+        ...devices['Desktop Chrome'],
+        defaultBrowserType: 'chromium',
+      },
+    },
   ],
 })

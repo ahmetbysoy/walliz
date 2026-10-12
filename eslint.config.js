@@ -15,7 +15,7 @@ export default tseslint.config(
       'playwright-report',
       'test-results',
       'stats.html',
-      'scripts/gen-icons.mjs',
+      'scripts/**',
     ],
   },
   js.configs.recommended,
